@@ -21,7 +21,7 @@ app = FastAPI(title="Techbleat Global Bank - Activity Service")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN, "http://127.0.0.1:3000"],
+    allow_origins=[FRONTEND_ORIGIN, "http://54.216.120.146:3000" ], #   "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
