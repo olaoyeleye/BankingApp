@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
-const USER_API = "http://localhost:8000";
-const TX_API = "http://localhost:8080";
-const ACTIVITY_API = "http://localhost:8001";
+const USER_API = "http://54.216.120.146:8000";
+const TX_API = "http://54.216.120.146:8080";
+const ACTIVITY_API = "http://54.216.120.146:8001";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
