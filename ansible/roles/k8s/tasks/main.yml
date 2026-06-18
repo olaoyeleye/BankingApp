@@ -1,0 +1,164 @@
+---
+- name: Ensure required packages are installed
+  dnf:
+    name:
+    - unzip
+    - git
+    state: present
+
+- name: Install AWS CLI v2
+  shell: |
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+    unzip -o /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install --update
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Get latest kubectl version
+  uri:
+    url: https://dl.k8s.io/release/stable.txt
+    return_content: yes
+  register: kubectl_version
+
+- name: Download kubectl binary
+  get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+    force: false
+
+- name: Verify kubectl installed
+  command: kubectl version --client
+  register: kubectl_out
+  changed_when: false
+
+- name: Print kubectl version
+  debug:
+    msg: "{{ kubectl_out.stdout }}"
+
+- name: Configure kubeconfig for EKS
+  shell: |
+    mkdir -p /home/ec2-user/.kube
+    aws eks update-kubeconfig \
+      --name {{ eks_cluster_name }} \
+      --region {{ aws_region }} \
+      --kubeconfig /home/ec2-user/.kube/config
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+  ignore_errors: true
+
+- name: Set kubeconfig permissions
+  file:
+    path: /home/ec2-user/.kube/config
+    owner: ec2-user
+    group: ec2-user
+    mode: '0600'
+  ignore_errors: true
+
+# ---- NEW: copy k8s manifests to EC2 ----
+- name: Create k8s directory on EC2
+  file:
+    path: /home/ec2-user/k8s
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: '0755'
+
+- name: Copy k8s manifests to EC2
+  copy:
+    src: "{{ playbook_dir }}/../k8s/"
+    dest: /home/ec2-user/k8s/
+    owner: ec2-user
+    group: ec2-user
+    mode: '0644'
+
+
+# ---- Update image in deployment manifest ----
+- name: Set app image in deploy.yml
+  replace:
+    path: /home/ec2-user/k8s/deploy.yml
+    regexp: 'image: my-image'
+    replace: "image: {{ app_image }}"
+
+    
+- name: Set app image in k8s/user-service.yml
+  replace:
+    path: /home/ec2-user/k8s/user-service.yml
+    regexp: 'YOUR_ECR_URL: YOUR_ECR_URL'
+    replace: "YOUR_ECR_URL: {{ YOUR_ECR_URL }}"
+
+    
+- name: Set app image in k8s/transaction-service.yml
+  replace:
+    path: /home/ec2-user/k8s/transaction-service.yml
+    regexp: 'YOUR_ECR_URL: YOUR_ECR_URL'
+    replace: "YOUR_ECR_URL: {{ YOUR_ECR_URL }}"
+
+    
+- name: Set app image in k8s/activity-service.yml
+  replace:
+    path: /home/ec2-user/k8s/activity-service.yml
+    regexp: 'YOUR_ECR_URL: YOUR_ECR_URL'
+    replace: "YOUR_ECR_URL: {{ YOUR_ECR_URL }}"
+
+
+- name: Deploy app to Kubernetes
+  shell: |
+    kubectl apply -f k8s/namespace.yml
+    kubectl apply -f k8s/secrets.yml
+    kubectl apply -f k8s/configmap.yml
+    kubectl apply -f k8s/postgres.yml
+    kubectl apply -f k8s/redis.yml
+    kubectl apply -f k8s/kafka.yml
+
+    # Wait for postgres, redis and kafka to be ready
+    kubectl wait --for=condition=ready pod -l app=postgres -n banking --timeout=120s
+    kubectl wait --for=condition=ready pod -l app=redis -n banking --timeout=120s
+    kubectl wait --for=condition=ready pod -l app=kafka -n banking --timeout=120s
+
+    # Then deploy services
+    kubectl apply -f k8s/user-service.yml
+    kubectl apply -f k8s/transaction-service.yml
+    kubectl apply -f k8s/activity-service.yml
+
+    # Check everything
+    kubectl get all -n banking
+
+  # kubectl apply -f /home/ec2-user/k8s/deploy.yml --validate=false
+  #kubectl apply -f /home/ec2-user/k8s/service.yml --validate=false
+
+
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: kubectl_apply
+  ignore_errors: true
+
+- name: Print deploy output
+  debug:
+    msg: "{{ kubectl_apply.stdout }}"
+
+- name: Wait for rollout
+  shell: kubectl rollout status deployment/fast-app --timeout=120s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  ignore_errors: true
+
+- name: Get service URL
+  shell: |
+    kubectl get service fast-app-service \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: service_url
+  ignore_errors: true
+
+- name: Print service URL
+  debug:
+    msg: "App URL: {{ service_url.stdout }}"

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activity-service
+  namespace: banking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: activity-service
+  template:
+    metadata:
+      labels:
+        app: activity-service
+    spec:
+      containers:
+        - name: activity-service
+          image: YOUR_ECR_URL/activity-service:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: DATABASE_URL
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: banking-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: FRONTEND_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: banking-config
+                  key: FRONTEND_ORIGIN
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activity-service
+  namespace: banking
+spec:
+  selector:
+    app: activity-service
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: LoadBalancer
