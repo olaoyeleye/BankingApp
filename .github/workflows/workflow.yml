@@ -33,7 +33,6 @@ jobs:
         ami                     = "${{ secrets.AMI_ID }}"
         instance_type           = "${{ secrets.INSTANCE_TYPE }}"
         instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}"
-        instance-name-java      = "${{ secrets.INSTANCE_NAME_JAVA }}"
         vpc_name                = "${{ secrets.VPC_NAME }}"
         EOF
  
