@@ -2,7 +2,7 @@ name: Deploy Entire Infra
 
 on:
   push:
-    branches: [main]
+    branches: [feat-dev]
   workflow_dispatch:
 
 jobs:
