@@ -91,7 +91,7 @@ resource "aws_eks_node_group" "main" {
 #   ,aws_route.private_nat # <--- CRITICAL: Wait for internet access
   ]
   tags = {
-    name = "Kubernetes-node"
+    Name = "Kubernetes-node"
   }
 }
 
