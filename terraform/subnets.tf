@@ -1,6 +1,7 @@
 resource "aws_subnet" "public-kunle-subnet" {
   vpc_id     = aws_vpc.vpc.id
   cidr_block = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -14,6 +15,7 @@ resource "aws_subnet" "public-kunle-subnet" {
 resource "aws_subnet" "public-kunle-subnet-2" {
   vpc_id     = aws_vpc.vpc.id
   cidr_block = "10.0.4.0/24"
+  availability_zone       = "${var.region}b"   # e.g. eu-west-1b
   map_public_ip_on_launch = true
 
   tags = {
