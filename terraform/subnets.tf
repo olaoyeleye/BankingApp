@@ -13,7 +13,7 @@ resource "aws_subnet" "public-kunle-subnet" {
 
 resource "aws_subnet" "public-kunle-subnet-2" {
   vpc_id     = aws_vpc.vpc.id
-  cidr_block = "10.0.3.0/24"
+  cidr_block = "10.0.4.0/24"
   map_public_ip_on_launch = true
 
   tags = {
