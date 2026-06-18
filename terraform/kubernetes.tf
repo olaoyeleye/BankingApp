@@ -58,9 +58,14 @@ resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
 
-  vpc_config {
-    subnet_ids = concat(aws_subnet.public-kunle-subnet[*].id, aws_subnet.private-kunle-subnet[*].id)
-  }
+  #vpc_config {
+  #  subnet_ids = concat(aws_subnet.public-kunle-subnet[*].id, aws_subnet.private-kunle-subnet[*].id)
+  #}
+    vpc_config {
+    subnet_ids = [
+      aws_subnet.public-kunle-subnet.id,
+      aws_subnet.public-kunle-subnet-2.id
+    ]
 
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
