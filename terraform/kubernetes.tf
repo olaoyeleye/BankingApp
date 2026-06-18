@@ -90,6 +90,9 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.eks_registry_policy
 #   ,aws_route.private_nat # <--- CRITICAL: Wait for internet access
   ]
+  tag{
+    name = "Kubernetes-node"
+  }
 }
 
 
