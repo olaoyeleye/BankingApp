@@ -26,6 +26,7 @@ jobs:
         terraform_wrapper: false
 
     - name: Create terraform.tfvars
+      working-directory: ./terraform
       run: |
         cat > terraform.tfvars <<EOF
         region                  = "${{ secrets.AWS_REGION }}"
