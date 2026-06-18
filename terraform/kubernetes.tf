@@ -66,7 +66,7 @@ resource "aws_eks_cluster" "main" {
       aws_subnet.public-kunle-subnet.id,
       aws_subnet.public-kunle-subnet-2.id
     ]
-
+    }
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
