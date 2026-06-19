@@ -125,10 +125,10 @@
 
 - name: Print image values
   debug:
-    msg: "{{ image_check.stdout }}"v
+    msg: "{{ image_check.stdout }}"
 
 
-    
+
 # ---- STEP 2: Clean up any stuck namespace from previous runs ----
 - name: Clean up old banking namespace
   shell: |
