@@ -45,10 +45,12 @@
       --kubeconfig /home/ec2-user/.kube/config
   become_user: ec2-user
   environment:
-    HOME: /home/ec2-user
-    AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
-    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
+    HOME: /home/ec2-user 
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_REGION') }}"
+    AWS_REGION: "{{ lookup('env', 'AWS_REGION') }}"
+    EKS_CLUSTER_NAME: "{{ lookup('env', 'EKS_CLUSTER_NAME') }}"
   ignore_errors: true
 
 - name: Set kubeconfig permissions
