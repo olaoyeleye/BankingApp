@@ -120,6 +120,7 @@
 - name: Check PVC and storage status
   shell: |
     echo "=== Applying StorageClass ==="
+    kubectl delete storageclass gp2 --ignore-not-found=true
     kubectl apply -f /home/ec2-user/k8s/storageclass.yml
     
     echo "=== Verify StorageClass ==="
