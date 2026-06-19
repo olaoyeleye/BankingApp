@@ -113,6 +113,22 @@
   debug:
     msg: "{{ sc_fix.stdout }}"
 
+
+
+- name: Verify image replacement
+  shell: |
+    grep "image:" /home/ec2-user/k8s/user-service.yml
+    grep "image:" /home/ec2-user/k8s/transaction-service.yml
+    grep "image:" /home/ec2-user/k8s/activity-service.yml
+  become_user: ec2-user
+  register: image_check
+
+- name: Print image values
+  debug:
+    msg: "{{ image_check.stdout }}"v
+
+
+    
 # ---- STEP 2: Clean up any stuck namespace from previous runs ----
 - name: Clean up old banking namespace
   shell: |
