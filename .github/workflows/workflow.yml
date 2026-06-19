@@ -235,8 +235,20 @@ jobs:
                         transaction_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }} \
                         activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
                         
-    - name: Get Load Balancer URL
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Get Load Balancer URL 
       run: |
-        kubectl get service fast-app-service \
+        aws eks update-kubeconfig \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }}
+
+        echo "=== User Service ==="
+        kubectl get service user-service -n banking \
+          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+        echo "=== Transaction Service ==="
+        kubectl get service transaction-service -n banking \
+          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+        echo "=== Activity Service ==="
+        kubectl get service activity-service -n banking \
           -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
