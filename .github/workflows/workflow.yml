@@ -84,7 +84,7 @@ jobs:
 
     - name: Build, Tag and Push image to ECR
       #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
-      id: build-postgres-service
+      id: build-transaction-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: bank-app-transaction-service
