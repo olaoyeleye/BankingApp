@@ -147,7 +147,7 @@
 - name: Deploy infrastructure to Kubernetes
   shell: |
     kubectl apply -f /home/ec2-user/k8s/namespace.yml
-    kubectl apply -f /home/ec2-user/k8s/secrets.yml
+    kubectl apply -f /home/ec2-user/k8s/secret.yml
     kubectl apply -f /home/ec2-user/k8s/configmap.yml
     kubectl apply -f /home/ec2-user/k8s/postgres.yml
     kubectl apply -f /home/ec2-user/k8s/redis.yml
