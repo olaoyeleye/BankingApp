@@ -128,6 +128,22 @@ jobs:
 
 
 
+    - name: Build, Tag and Push frontend image to ECR
+      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      id: build-frontend-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-frontend
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-frontend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
 
     - name: Install Ansible
       #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
@@ -246,6 +262,7 @@ jobs:
                         aws_region=${{ secrets.AWS_REGION }} \
                         user_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-user-service:${{ github.sha }} \
                         transaction_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }} \
+                        frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }} \
                         activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
                         
     - name: Get Load Balancer URL 
@@ -265,3 +282,4 @@ jobs:
         echo "=== Activity Service ==="
         kubectl get service activity-service -n banking \
           -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
