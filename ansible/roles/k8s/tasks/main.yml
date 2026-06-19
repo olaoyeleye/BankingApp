@@ -75,6 +75,14 @@
     group: ec2-user
     mode: '0644'
 
+- name: Copy frontend manifests to EC2
+  copy:
+    src: "{{ playbook_dir }}/../techbleat-global-bank-frontend/manifest/"
+    dest: /home/ec2-user/k8s/
+    owner: ec2-user
+    group: ec2-user
+    mode: '0644'
+
 - name: Set app image in user-service.yml
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/user-service.yml
@@ -93,6 +101,12 @@
     regexp: 'YOUR_ECR_URL/activity-service:latest'
     replace: "{{ activity_service_image }}"
 
+- name: Set app image in frontend-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/frontend.yml
+    regexp: 'YOUR_ECR_URL/frontend-service:latest'
+    replace: "{{ frontend_service_image }}" 
+    
 # ---- STEP 1: Fix StorageClass FIRST before anything else ----
 - name: Fix StorageClass
   shell: |
@@ -152,6 +166,8 @@
     kubectl apply -f /home/ec2-user/k8s/postgres.yml
     kubectl apply -f /home/ec2-user/k8s/redis.yml
     kubectl apply -f /home/ec2-user/k8s/kafka.yml
+
+    kubectl apply -f /home/ec2-user/k8s/frontend.yml
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
