@@ -117,6 +117,37 @@
   debug:
     msg: "{{ infra_apply.stdout }}"
 
+- name: Check PVC and storage status
+  shell: |
+    echo "=== Applying StorageClass ==="
+    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
+    
+    echo "=== Verify StorageClass ==="
+    kubectl get storageclass
+
+    echo "=== Applying namespace and configs ===" 
+    kubectl get storageclass
+    echo "=== PVC Status ==="
+    kubectl get pvc -n banking
+    echo "=== Postgres Pod Events ==="
+    kubectl describe pod -l app=postgres -n banking | tail -20
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: pvc_debug
+
+- name: Print PVC debug
+  debug:
+    msg: "{{ pvc_debug.stdout }}"
+
+
+
+
+
 - name: Wait for postgres
   shell: kubectl wait --for=condition=ready pod -l app=postgres -n banking --timeout=180s
   become_user: ec2-user
