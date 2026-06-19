@@ -104,9 +104,9 @@
 - name: Set app image in frontend-service.yml
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/frontend.yml
-    regexp: 'YOUR_ECR_URL/frontend-service:latest'
+    regexp: 'YOUR_ECR_URL/bank-frontend:latest'
     replace: "{{ frontend_service_image }}" 
-    
+
 # ---- STEP 1: Fix StorageClass FIRST before anything else ----
 - name: Fix StorageClass
   shell: |
