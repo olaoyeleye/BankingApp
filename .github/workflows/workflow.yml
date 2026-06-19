@@ -192,7 +192,7 @@ jobs:
       run: |
         aws eks update-kubeconfig \
           --name ${{ secrets.EKS_CLUSTER_NAME }} \
-          --region ${{ secrets.AWS_REGION }}
+          --region ${{ secrets.AWS_REGION }} 
 
         eksctl create iamidentitymapping \
           --cluster ${{ secrets.EKS_CLUSTER_NAME }} \
