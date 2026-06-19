@@ -36,7 +36,6 @@
   debug:
     msg: "{{ kubectl_out.stdout }}"
 
-# ← FIX 1: use hostvars/vars not lookup('env') — env vars aren't passed to shell
 - name: Configure kubeconfig for EKS
   shell: |
     mkdir -p /home/ec2-user/.kube
@@ -76,7 +75,6 @@
     group: ec2-user
     mode: '0644'
 
-# ← FIX 2: all three services use app_image variable passed via --extra-vars
 - name: Set app image in user-service.yml
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/user-service.yml
@@ -95,7 +93,41 @@
     regexp: 'YOUR_ECR_URL/activity-service:latest'
     replace: "{{ activity_service_image }}"
 
+# ---- STEP 1: Fix StorageClass FIRST before anything else ----
+- name: Fix StorageClass
+  shell: |
+    kubectl delete storageclass gp2 --ignore-not-found=true
+    sleep 5
+    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
+    kubectl get storageclass
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: sc_fix
 
+- name: Print StorageClass output
+  debug:
+    msg: "{{ sc_fix.stdout }}"
+
+# ---- STEP 2: Clean up any stuck namespace from previous runs ----
+- name: Clean up old banking namespace
+  shell: |
+    kubectl delete namespace banking --ignore-not-found=true
+    kubectl wait --for=delete namespace/banking --timeout=60s || true
+    sleep 10
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+# ---- STEP 3: Deploy infra with correct storage class ----
 - name: Deploy infrastructure to Kubernetes
   shell: |
     kubectl apply -f /home/ec2-user/k8s/namespace.yml
@@ -117,21 +149,9 @@
   debug:
     msg: "{{ infra_apply.stdout }}"
 
-- name: Check PVC and storage status
-  shell: |
-    echo "=== Applying StorageClass ==="
-    kubectl delete storageclass gp2 --ignore-not-found=true
-    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
-    
-    echo "=== Verify StorageClass ==="
-    kubectl get storageclass
-
-    echo "=== Applying namespace and configs ===" 
-    kubectl get storageclass
-    echo "=== PVC Status ==="
-    kubectl get pvc -n banking
-    echo "=== Postgres Pod Events ==="
-    kubectl describe pod -l app=postgres -n banking | tail -20
+# ---- STEP 4: Check EBS CSI driver is running ----
+- name: Check EBS CSI driver pods
+  shell: kubectl get pods -n kube-system | grep ebs || echo "NO EBS CSI PODS FOUND"
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
@@ -139,26 +159,43 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  register: pvc_debug
+  register: ebs_check
 
-- name: Print PVC debug
+- name: Print EBS CSI status
   debug:
-    msg: "{{ pvc_debug.stdout }}"
+    msg: "{{ ebs_check.stdout }}"
 
+# ---- STEP 5: Check PVC bound before waiting for pods ----
+- name: Check PVC status
+  shell: |
+    echo "=== PVC ==="
+    kubectl get pvc -n banking
+    echo "=== Pod status ==="
+    kubectl get pods -n banking
+    echo "=== Postgres events ==="
+    kubectl describe pod -l app=postgres -n banking | grep -A5 "Events:"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: pvc_status
 
-
-
+- name: Print PVC status
+  debug:
+    msg: "{{ pvc_status.stdout }}"
 
 - name: Wait for postgres
   shell: kubectl wait --for=condition=ready pod -l app=postgres -n banking --timeout=180s
   become_user: ec2-user
   environment:
-    HOME: /home/ec2-user 
+    HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  register: postgres_wait
   ignore_errors: true
 
 - name: Wait for redis
@@ -170,7 +207,6 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  register: redis_wait
   ignore_errors: true
 
 - name: Wait for kafka
@@ -182,10 +218,9 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  register: kafka_wait
   ignore_errors: true
 
-- name: Check pod status if wait failed
+- name: Final pod status
   shell: kubectl get pods -n banking
   become_user: ec2-user
   environment:
@@ -215,7 +250,7 @@
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: services_apply
 
-- name: Print services apply output
+- name: Print services output
   debug:
     msg: "{{ services_apply.stdout }}"
 
@@ -224,9 +259,11 @@
     echo "=== User Service ==="
     kubectl get service user-service -n banking \
       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
+    echo ""
     echo "=== Transaction Service ==="
     kubectl get service transaction-service -n banking \
       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
+    echo ""
     echo "=== Activity Service ==="
     kubectl get service activity-service -n banking \
       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
