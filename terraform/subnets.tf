@@ -6,8 +6,9 @@ resource "aws_subnet" "public-kunle-subnet" {
 
   tags = {
     Name                                            = "${var.vpc_name}-public"
-    "kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
+    #"kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
+    "kubernetes.io/role/elb" = "1" # Required for public LBS
   }
 }
 
@@ -20,8 +21,9 @@ resource "aws_subnet" "public-kunle-subnet-2" {
 
   tags = {
     Name                                            = "${var.vpc_name}-public"
-    "kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
+    #"kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
+    "kubernetes.io/role/elb" = "1"
   }
 }
 
@@ -33,7 +35,7 @@ resource "aws_subnet" "private-kunle-subnet" {
 
 
     tags = {
-    Name                                            = "${var.vpc_name}-public"
+    Name                                            = "${var.vpc_name}-private"
     "kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
   }
