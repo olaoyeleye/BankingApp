@@ -66,20 +66,41 @@ jobs:
 
     - name: Build, Tag and Push image to ECR
       #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
-      id: build-image
+      id: build-user-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: bank-app
+        ECR_REPOSITORY: bank-app-user-service
         IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
       run: |
         ls -ltar
         pwd
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ../k8s/user-service.yml .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
                    $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Build, Tag and Push image to ECR
+      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+      id: build-postgres-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-postgres
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
+      run: |
+        ls -ltar
+        pwd
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ../k8s/postgres.yml .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+
 
     - name: Install Ansible
       #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
