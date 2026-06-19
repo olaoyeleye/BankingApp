@@ -95,7 +95,8 @@
     regexp: 'YOUR_ECR_URL/activity-service:latest'
     replace: "{{ activity_service_image }}"
 
-- name: Deploy app to Kubernetes
+
+- name: Deploy infrastructure to Kubernetes
   shell: |
     kubectl apply -f /home/ec2-user/k8s/namespace.yml
     kubectl apply -f /home/ec2-user/k8s/secrets.yml
@@ -103,37 +104,82 @@
     kubectl apply -f /home/ec2-user/k8s/postgres.yml
     kubectl apply -f /home/ec2-user/k8s/redis.yml
     kubectl apply -f /home/ec2-user/k8s/kafka.yml
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: infra_apply
 
-    kubectl wait --for=condition=ready pod -l app=postgres -n banking --timeout=120s
-    kubectl wait --for=condition=ready pod -l app=redis -n banking --timeout=120s
-    kubectl wait --for=condition=ready pod -l app=kafka -n banking --timeout=180s
+- name: Print infra apply output
+  debug:
+    msg: "{{ infra_apply.stdout }}"
 
+- name: Wait for postgres
+  shell: kubectl wait --for=condition=ready pod -l app=postgres -n banking --timeout=180s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: postgres_wait
+  ignore_errors: true
+
+- name: Wait for redis
+  shell: kubectl wait --for=condition=ready pod -l app=redis -n banking --timeout=120s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: redis_wait
+  ignore_errors: true
+
+- name: Wait for kafka
+  shell: kubectl wait --for=condition=ready pod -l app=kafka -n banking --timeout=300s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: kafka_wait
+  ignore_errors: true
+
+- name: Check pod status if wait failed
+  shell: kubectl get pods -n banking
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: pod_status
+
+- name: Print pod status
+  debug:
+    msg: "{{ pod_status.stdout }}"
+
+- name: Deploy app services to Kubernetes
+  shell: |
     kubectl apply -f /home/ec2-user/k8s/user-service.yml
     kubectl apply -f /home/ec2-user/k8s/transaction-service.yml
     kubectl apply -f /home/ec2-user/k8s/activity-service.yml
-
     kubectl get all -n banking
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
-  register: kubectl_apply
+  register: services_apply
 
-- name: Print deploy output
+- name: Print services apply output
   debug:
-    msg: "{{ kubectl_apply.stdout }}"
+    msg: "{{ services_apply.stdout }}"
 
 - name: Get service URLs
   shell: |
-    echo "User service:"
+    echo "=== User Service ==="
     kubectl get service user-service -n banking \
-      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-    echo "Transaction service:"
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
+    echo "=== Transaction Service ==="
     kubectl get service transaction-service -n banking \
-      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-    echo "Activity service:"
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
+    echo "=== Activity Service ==="
     kubectl get service activity-service -n banking \
-      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "not ready"
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
