@@ -40,12 +40,12 @@
   shell: |
     mkdir -p /home/ec2-user/.kube
     aws eks update-kubeconfig \
-      --name {{ eks_cluster_name }} \
-      --region {{ aws_region }} \
+      --name $EKS_CLUSTER_NAME \
+      --region $AWS_REGION \
       --kubeconfig /home/ec2-user/.kube/config
   become_user: ec2-user
   environment:
-    HOME: /home/ec2-user 
+    HOME: /home/ec2-user
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_REGION') }}"
@@ -80,18 +80,26 @@
 
 
 # ---- Update image in deployment manifest ----
-- name: Set app image in deploy.yml
-  replace:
-    path: /home/ec2-user/k8s/deploy.yml
-    regexp: 'image: my-image'
-    replace: "image: {{ app_image }}"
+# - name: Set app image in deploy.yml
+#   replace:
+#     path: /home/ec2-user/k8s/deploy.yml
+#     regexp: 'image: my-image'
+#     replace: "image: {{ app_image }}"
 
     
+# - name: Set app image in k8s/user-service.yml
+#   replace:
+#     path: /home/ec2-user/k8s/user-service.yml
+#     regexp: 'YOUR_ECR_URL: YOUR_ECR_URL'
+#     replace: "YOUR_ECR_URL: {{ YOUR_ECR_URL }}"
+
+
 - name: Set app image in k8s/user-service.yml
-  replace:
+  ansible.builtin.replace:
     path: /home/ec2-user/k8s/user-service.yml
-    regexp: 'YOUR_ECR_URL: YOUR_ECR_URL'
-    replace: "YOUR_ECR_URL: {{ YOUR_ECR_URL }}"
+    regexp: 'YOUR_ECR_URL'
+    replace: "{{ lookup('env', 'ECR_REGISTRY') }}/bank-app-user-service:{{ lookup('env', 'IMAGE_TAG') }}"
+
 
     
 - name: Set app image in k8s/transaction-service.yml
