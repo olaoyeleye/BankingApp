@@ -101,6 +101,12 @@
     regexp: 'YOUR_ECR_URL/activity-service:latest'
     replace: "{{ activity_service_image }}"
 
+
+- name: Set app image in postgres.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/postgres.yml
+    regexp: 'YOUR_ECR_URL/bank-app-postgres:latest'
+    replace: "{{ postgres_image }}"
 # - name: Set app image in frontend-service.yml
 #   ansible.builtin.replace:
 #     path: /home/ec2-user/k8s/frontend.yml

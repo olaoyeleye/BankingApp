@@ -70,7 +70,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15
+          image: YOUR_ECR_URL/bank-app-postgres:latest
           ports:
             - containerPort: 5432
           env:
