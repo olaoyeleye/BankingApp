@@ -43,7 +43,20 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      run: terraform plan -out=tfplan  
+      run: |
+        terraform plan -out=tfplan  \
+
+        aws eks delete-addon \
+          --cluster-name your-cluster-name \
+          --addon-name aws-ebs-csi-driver \
+          --region your-region
+ 
+        aws eks wait addon-deleted \
+          --cluster-name your-cluster-name \
+          --addon-name aws-ebs-csi-driver \
+          --region your-region
+ 
+
 
     # - name: Terraform destroy
     #   working-directory: ./terraform
