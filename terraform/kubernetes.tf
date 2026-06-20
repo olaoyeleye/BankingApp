@@ -132,3 +132,34 @@ resource "aws_security_group_rule" "allow_eks_to_rds" {
   security_group_id        = aws_security_group.private-kunle-sg.id # The RDS SG
   source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }
+
+
+# Add to kubernetes.tf
+
+resource "aws_iam_role" "ebs_csi_role" {
+  name = "${var.vpc_name}-ebs-csi-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.eks_nodes.name   # attach to existing node role
+}
+
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "aws-ebs-csi-driver"
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.ebs_csi_policy
+  ]
+}
