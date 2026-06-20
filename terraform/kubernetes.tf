@@ -159,7 +159,10 @@ resource "aws_eks_addon" "ebs_csi" {
   addon_name   = "aws-ebs-csi-driver"
 
   #resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_management_policy = "OVERWRITE"
+  #resolve_conflicts_management_policy = "OVERWRITE"
+
+
+  resolve_conflicts = "OVERWRITE"
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy
