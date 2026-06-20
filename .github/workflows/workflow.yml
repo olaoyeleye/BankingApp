@@ -29,13 +29,12 @@ jobs:
       working-directory: ./terraform
       run: |
         cat > terraform.tfvars <<EOF
-        region                  = "${{ secrets.AWS_REGION }}"
-        ami                     = "${{ secrets.AMI_ID }}"
+        region                 = "${{ secrets.AWS_REGION }}"
+        ami                    = "${{ secrets.AMI_ID }}"
         instance_type           = "${{ secrets.INSTANCE_TYPE }}"
         instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}"
         vpc_name                = "${{ secrets.VPC_NAME }}"
         EOF
- 
  
     - name: Terraform Init
       working-directory: ./terraform
@@ -43,38 +42,18 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      run: |
-        terraform plan -out=tfplan  \
-
-        aws eks delete-addon \
-          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-          --addon-name aws-ebs-csi-driver \
-          --region ${{ secrets.AWS_REGION }}
- 
- 
-        aws eks wait addon-deleted \
-          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-          --addon-name aws-ebs-csi-driver \
-          --region ${{ secrets.AWS_REGION }}
- 
-
-
-    # - name: Terraform destroy
-    #   working-directory: ./terraform
-    #   run: terraform destroy -auto-approve 
+      run: terraform plan -out=tfplan
 
     - name: Terraform Apply
       working-directory: ./terraform
       run: terraform apply -auto-approve tfplan   
-
         
     - name: Login to Amazon ECR
       if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build, Tag and Push image to ECR
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Build, Tag and Push image to ECR (User)
       id: build-user-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -82,17 +61,12 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       working-directory: ./techbleat-global-bank-backend
       run: |
-        ls -ltar
-        pwd
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./user-service
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Build, Tag and Push image to ECR
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Build, Tag and Push image to ECR (Transaction)
       id: build-transaction-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -102,13 +76,10 @@ jobs:
       run: | 
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./transaction-service 
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Build, Tag and Push image to ECR
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Build, Tag and Push image to ECR (Activity)
       id: build-activity-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -118,13 +89,10 @@ jobs:
       run: | 
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./activity-service
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Build, Tag and Push image to ECR
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Build, Tag and Push image to ECR (Postgres Init)
       id: build-postgres-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -134,16 +102,10 @@ jobs:
       run: | 
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./db-init
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-
-
 
     - name: Build, Tag and Push frontend image to ECR
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       id: build-frontend-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -153,27 +115,21 @@ jobs:
       run: | 
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                   $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
 
     - name: Install Ansible
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         python3 -m pip install --upgrade pip
         python3 -m pip install ansible boto3 botocore
 
     - name: Install kubectl
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
 
     - name: Install eksctl
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         curl --silent --location \
           "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
@@ -181,26 +137,20 @@ jobs:
         sudo mv /tmp/eksctl /usr/local/bin
 
     - name: Get Nginx public IP
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       id: nginx-ip
       working-directory: ./terraform
       run: |
         echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
 
     - name: Save SSH private key
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       env:
         SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
       run: |
         mkdir -p /home/runner/.ssh
         echo "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
-        sed -i 's/\r//g' /home/runner/.ssh/ansible_key.pem
         chmod 600 /home/runner/.ssh/ansible_key.pem
-        ssh-keygen -y -f /home/runner/.ssh/ansible_key.pem
-        echo "Key is valid"
 
     - name: Wait for EC2 to be ready
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         for i in {1..12}; do
           ssh -i /home/runner/.ssh/ansible_key.pem \
@@ -212,8 +162,7 @@ jobs:
           sleep 15
         done
 
-    - name: Add EC2 IAM role to EKS aws-auth
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
+    - name: Map EC2 IAM identity inside EKS
       run: |
         aws eks update-kubeconfig \
           --name ${{ secrets.EKS_CLUSTER_NAME }} \
@@ -227,26 +176,7 @@ jobs:
           --group system:masters \
           --no-duplicate-arns
 
-        eksctl utils associate-iam-oidc-provider --cluster ${{ secrets.EKS_CLUSTER_NAME }} --approve
-
-        eksctl create iamserviceaccount \
-          --name ebs-csi-controller-sa \
-          --namespace kube-system \
-          --region ${{ secrets.AWS_REGION }} \
-          --cluster ${{ secrets.EKS_CLUSTER_NAME }}  \
-          --role-name AmazonEKS_EBS_CSI_DriverRole \
-          --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
-          --approve \
-          --role-only
-        eksctl create addon \
-          --name aws-ebs-csi-driver \
-          --cluster ${{ secrets.EKS_CLUSTER_NAME }} \
-          --service-account-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/AmazonEKS_EBS_CSI_DriverRole \
-          --force
-
-
     - name: Create Ansible inventory
-      #if: ${{ github.event.inputs.terraform_action != 'destroy' }}
       run: |
         cat > ansible/hosts.ini <<EOF
         [nginx]
@@ -260,15 +190,7 @@ jobs:
         eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}
         EOF
 
-    # - name: Run Ansible playbook
-    #   if: ${{ github.event.inputs.terraform_action != 'destroy' }}
-    #   run: |
-    #     ANSIBLE_CONFIG=ansible/ansible.cfg \
-    #     ansible-playbook ansible/playbook.yml \
-    #       --extra-vars "app_image=${{ steps.login-ecr.outputs.registry }}/fast-app-repo:${{ github.sha }}"
-
     - name: Run Ansible playbook
-      if: ${{ env.TF_ACTION != 'destroy' }}
       run: |
         ANSIBLE_CONFIG=ansible/ansible.cfg \
         ansible-playbook ansible/playbook.yml \
@@ -286,14 +208,10 @@ jobs:
           --region ${{ secrets.AWS_REGION }}
 
         echo "=== User Service ==="
-        kubectl get service user-service -n banking \
-          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+        kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
 
         echo "=== Transaction Service ==="
-        kubectl get service transaction-service -n banking \
-          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+        kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
 
         echo "=== Activity Service ==="
-        kubectl get service activity-service -n banking \
-          -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-
+        kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
