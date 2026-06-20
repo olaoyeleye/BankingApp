@@ -42,10 +42,36 @@ jobs:
 
 
 
+    # - name: Import Existing OIDC Provider if it exists 
+    #   working-directory: ./terraform
+    #   run: |
+    #     OIDC_URL=$(aws eks describe-cluster --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }} --query "cluster.identity.oidc.issuer" --output text)
+    #     ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+    #     PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
+
+    #     echo "Checking if OIDC Provider needs to be imported into state..."
+    #     if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
+    #       echo "Importing existing provider: $PROVIDER_ARN"
+    #       terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
+    #     else
+    #       echo "OIDC Provider is already tracked in state."
+    #     fi
+
+
     - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
       run: |
-        OIDC_URL=$(aws eks describe-cluster --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }} --query "cluster.identity.oidc.issuer" --output text)
+        echo "Fetching OIDC Issuer URL from EKS..."
+        OIDC_URL=$(aws eks describe-cluster --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }} --query "cluster.identity.oidc.issuer" --output text 2>/dev/null)
+
+        if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
+          echo "ERROR: Failed to retrieve a valid OIDC Issuer URL from EKS."
+          echo "Received value: '$OIDC_URL'"
+          echo "Stopping workflow execution to prevent state corruption."
+          exit 1
+        fi
+        echo "✅ Valid OIDC Issuer URL found: $OIDC_URL"
+
         ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
         PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
 
@@ -57,7 +83,6 @@ jobs:
           echo "OIDC Provider is already tracked in state."
         fi
 
-    # 2. Next, clear out any half-installed addons from the AWS cluster engine
     - name: Clear Pre-existing Addon Conflicts
       run: |
         aws eks delete-addon \
