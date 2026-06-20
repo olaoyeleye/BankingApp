@@ -218,26 +218,55 @@ jobs:
                         aws_region=${{ secrets.AWS_REGION }} \
                         user_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-user-service:${{ github.sha }} \
                         transaction_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }} \
-                        frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }} \
                         activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
-                        
-    - name: Get Load Balancer URL 
+
+    # - name: Run Ansible playbook
+    #   run: |
+    #     ANSIBLE_CONFIG=ansible/ansible.cfg \
+    #     ansible-playbook ansible/playbook_frontend.yml \
+    #       --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}" \
+    #       --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
+    #       --extra-vars "frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
+
+    - name: Get Load Balancer URLs
+      id: get-lb-urls
       run: |
         aws eks update-kubeconfig \
           --name ${{ secrets.EKS_CLUSTER_NAME }} \
           --region ${{ secrets.AWS_REGION }}
 
-        echo "=== User Service ==="
-        kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+        USER_LB=$(kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+        TX_LB=$(kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+        ACTIVITY_LB=$(kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
-        echo "=== Transaction Service ==="
-        kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+        echo "user_lb=$USER_LB" >> "$GITHUB_OUTPUT"
+        echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
+        echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
 
-        echo "=== Activity Service ==="
-        kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "Pending..."
+    - name: Update frontend API endpoints
+      working-directory: ./techbleat-global-bank-frontend
+      run: |
+        sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "http://${{ steps.get-lb-urls.outputs.user_lb }}:8000";|' src/App.jsx
+        sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "http://${{ steps.get-lb-urls.outputs.tx_lb }}:8080";|' src/App.jsx
+        sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "http://${{ steps.get-lb-urls.outputs.activity_lb }}:8001";|' src/App.jsx
 
+    - name: Build, Tag and Push frontend image to ECR
+      id: build-frontend-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-frontend
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-frontend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
     - name: Run Ansible playbook
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         ANSIBLE_CONFIG=ansible/ansible.cfg \
         ansible-playbook ansible/playbook_frontend.yml \
