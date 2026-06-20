@@ -51,6 +51,7 @@ jobs:
           --addon-name aws-ebs-csi-driver \
           --region ${{ secrets.AWS_REGION }}
  
+ 
         aws eks wait addon-deleted \
           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
           --addon-name aws-ebs-csi-driver \
