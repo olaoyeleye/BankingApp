@@ -40,25 +40,16 @@ jobs:
       working-directory: ./terraform
       run: terraform init 
 
-    - name: Terraform Plan
-      working-directory: ./terraform
-      run: terraform plan -out=tfplan
 
 
-
-    - name: Import Existing OIDC Provider if it exists
+    - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
       run: |
-        # Fetch the EKS cluster's OIDC Issuer URL dynamically
         OIDC_URL=$(aws eks describe-cluster --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }} --query "cluster.identity.oidc.issuer" --output text)
-        
-        # Strip the protocol prefix if needed to build the AWS ARN format
-        OIDC_ID=$(echo $OIDC_URL | awk -F'/' '{print $NF}')
         ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
         PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
 
         echo "Checking if OIDC Provider needs to be imported into state..."
-        # Only import if it isn't already tracked by Terraform
         if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
           echo "Importing existing provider: $PROVIDER_ARN"
           terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
@@ -66,6 +57,7 @@ jobs:
           echo "OIDC Provider is already tracked in state."
         fi
 
+    # 2. Next, clear out any half-installed addons from the AWS cluster engine
     - name: Clear Pre-existing Addon Conflicts
       run: |
         aws eks delete-addon \
@@ -80,6 +72,10 @@ jobs:
 
 
           
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: terraform plan -out=tfplan
 
     - name: Terraform Apply
       working-directory: ./terraform
