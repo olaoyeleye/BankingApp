@@ -200,6 +200,9 @@
 # ---- STEP 5: Check PVC bound before waiting for pods ----
 - name: Check PVC status
   shell: |
+    echo "=== PVC Describe ==="
+    kubectl describe pvc postgres-pvc -n banking
+    
     echo "=== PVC ==="
     kubectl get pvc -n banking
     echo "=== Pod status ==="
