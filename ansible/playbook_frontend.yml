@@ -1,0 +1,13 @@
+
+- name: Update frontend manifest on EC2 host
+  hosts: nginx        # ← must match a group/host in your inventory
+  become: true
+  tasks:
+    - name: Set app image in frontend.yml
+      ansible.builtin.replace:
+        path: /home/ec2-user/k8s/frontend.yml
+        regexp: 'YOUR_ECR_URL/bank-frontend:latest'
+        replace: "{{ frontend_service_image }}"
+
+
+ 
