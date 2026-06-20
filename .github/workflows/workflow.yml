@@ -57,17 +57,28 @@ jobs:
     #       echo "OIDC Provider is already tracked in state."
     #     fi
 
-
     - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
       run: |
         echo "Fetching OIDC Issuer URL from EKS..."
-        OIDC_URL=$(aws eks describe-cluster --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }} --query "cluster.identity.oidc.issuer" --output text 2>/dev/null)
+        
+        # Run the command without masking errors so we can see the exact AWS message
+        OIDC_URL=$(aws eks describe-cluster \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} \
+          --query "cluster.identity.oidc.issuer" \
+          --output text)
+        
+        # Check if the AWS CLI command itself failed (exit code not 0)
+        if [ $? -ne 0 ]; then
+          echo "❌ ERROR: AWS CLI command failed with exit code $?."
+          echo "Please verify that your cluster name '${{ secrets.EKS_CLUSTER_NAME }}' and region '${{ secrets.AWS_REGION }}' match your active AWS infrastructure."
+          exit 1
+        fi
 
+        # Validate the string format
         if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
-          echo "ERROR: Failed to retrieve a valid OIDC Issuer URL from EKS."
-          echo "Received value: '$OIDC_URL'"
-          echo "Stopping workflow execution to prevent state corruption."
+          echo "❌ ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
           exit 1
         fi
         echo "✅ Valid OIDC Issuer URL found: $OIDC_URL"
