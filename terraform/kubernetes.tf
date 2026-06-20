@@ -155,7 +155,7 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
 }
 
 resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.main.name
+  cluster_name = "${var.vpc_name}-cluster"
   addon_name   = "aws-ebs-csi-driver"
 
   resolve_conflicts_on_create = "OVERWRITE"
