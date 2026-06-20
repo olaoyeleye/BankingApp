@@ -36,4 +36,5 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # Try to start serve - adjust folder name if needed
-CMD ["sh", "-c", "ls -la && serve -s build -l 3000 || serve -s dist -l 3000 || serve -s . -l 3000"]
+#CMD ["sh", "-c", "ls -la && serve -s build -l 3000 || serve -s dist -l 3000 || serve -s . -l 3000"]
+CMD ["npx", "serve", "-s", "dist", "-p", "3000"]
