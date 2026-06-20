@@ -47,14 +47,14 @@ jobs:
         terraform plan -out=tfplan  \
 
         aws eks delete-addon \
-          --cluster-name your-cluster-name \
+          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
           --addon-name aws-ebs-csi-driver \
-          --region your-region
+          --region ${{ secrets.AWS_REGION }}
  
         aws eks wait addon-deleted \
-          --cluster-name your-cluster-name \
+          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
           --addon-name aws-ebs-csi-driver \
-          --region your-region
+          --region ${{ secrets.AWS_REGION }}
  
 
 
