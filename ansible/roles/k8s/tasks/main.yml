@@ -321,3 +321,23 @@
 - name: Print service URLs
   debug:
     msg: "{{ service_urls.stdout }}"
+
+# Creating ArgoCD
+
+- name: Create ArgoCD namespace
+  shell: kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+  become_user: ec2-user
+  environment:
+    KUBECONFIG: /home/ec2-user/.kube/config
+
+- name: Install ArgoCD
+  shell: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  become_user: ec2-user
+  environment:
+    KUBECONFIG: /home/ec2-user/.kube/config
+
+- name: Wait for ArgoCD server to be ready
+  shell: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=120s
+  become_user: ec2-user
+  environment:
+    KUBECONFIG: /home/ec2-user/.kube/config
