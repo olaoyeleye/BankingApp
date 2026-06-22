@@ -18,9 +18,7 @@ resource "aws_subnet" "public-kunle-subnet-2" {
   cidr_block = "10.0.4.0/24"
   availability_zone       = "${var.region}b"   # e.g. eu-west-1b
   map_public_ip_on_launch = true
-  depends_on = [
-    aws_eks_node_group.main
-  ]
+
   tags = {
     Name                                            = "${var.vpc_name}-public"
     #"kubernetes.io/role/internal-elb"               = "1" # Required for Private LBs
