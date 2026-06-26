@@ -83,6 +83,35 @@ resource "aws_eks_cluster" "main" {
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
+resource "aws_launch_template" "eks_nodes" {
+  name_prefix = "eks-nodes-"
+  description = "Launch template for EKS nodes"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 100
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  network_interfaces {
+    security_groups = [aws_security_group.public-kunle-sg.id]
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "EKS-Node"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
@@ -99,9 +128,9 @@ resource "aws_eks_node_group" "main" {
 
   instance_types = ["t3.small"]
   
-  # Attach nodes to the public security group
-  vpc_config {
-    security_groups = [aws_security_group.public-kunle-sg.id]
+  launch_template {
+    id      = aws_launch_template.eks_nodes.id
+    version = "$Latest"
   }
 
   depends_on = [
