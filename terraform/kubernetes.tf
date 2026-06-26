@@ -72,15 +72,13 @@ resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
 
-
-  endpoint_private_access = true  # Allows nodes to talk to API inside the VPC
-  endpoint_public_access  = true  # Allows external kubectl and public node routing
-
   vpc_config {
     subnet_ids = [
       aws_subnet.public-kunle-subnet.id,
       aws_subnet.public-kunle-subnet-2.id
     ]
+    endpoint_private_access = true
+    endpoint_public_access  = true
   }
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
