@@ -97,12 +97,19 @@ resource "aws_eks_node_group" "main" {
     min_size     = 2
   }
 
-  instance_types = ["t3.small"] 
+  instance_types = ["t3.small"]
+  
+  # Attach nodes to the public security group
+  vpc_config {
+    security_groups = [aws_security_group.public-kunle-sg.id]
+  }
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_registry_policy
+    aws_iam_role_policy_attachment.eks_registry_policy,
+    aws_security_group_rule.allow_cluster_to_nodes,
+    aws_security_group_rule.allow_nodes_to_cluster
   ]
   tags = {
     Name = "Kubernetes-node"

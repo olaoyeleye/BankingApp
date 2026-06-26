@@ -104,3 +104,37 @@ resource "aws_vpc_security_group_egress_rule" "allow-all-private-traffic" {
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1" # semantically equivalent to all ports
 }
+
+# ==============================================================================
+# EKS Cluster-to-Node Communication Rules
+# ==============================================================================
+
+# Allow EKS cluster control plane to communicate with nodes
+resource "aws_security_group_rule" "allow_cluster_to_nodes" {
+  type                     = "ingress"
+  from_port                = 1025
+  to_port                  = 65535
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.public-kunle-sg.id
+  source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  description              = "Allow EKS cluster control plane to communicate with nodes"
+}
+
+# Allow nodes to communicate with EKS cluster control plane (required for kubelet communication)
+resource "aws_security_group_rule" "allow_nodes_to_cluster" {
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.public-kunle-sg.id
+  source_security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  description              = "Allow nodes to communicate with EKS cluster control plane"
+}
+
+# Allow nodes to communicate with each other
+resource "aws_vpc_security_group_ingress_rule" "allow_node_to_node" {
+  security_group_id = aws_security_group.public-kunle-sg.id
+  cidr_ipv4         = aws_vpc.vpc.cidr_block
+  ip_protocol       = "-1"
+  description       = "Allow nodes to communicate with each other"
+}
