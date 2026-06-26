@@ -154,7 +154,7 @@
   shell: |
     kubectl delete namespace banking --ignore-not-found=true
     kubectl wait --for=delete namespace/banking --timeout=60s || true
-    sleep 10
+    sleep 5
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
