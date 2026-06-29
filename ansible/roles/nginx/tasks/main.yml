@@ -1,7 +1,8 @@
 - name: Update apt cache when needed
   apt:
     update_cache: yes
-  when: ansible_pkg_mgr == 'apt'
+  #when: ansible_pkg_mgr == 'apt'
+  when: ansible_facts['pkg_mgr'] == 'apt' 
 
 - name: Install Nginx
   package:

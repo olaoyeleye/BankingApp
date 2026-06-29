@@ -133,53 +133,19 @@
     msg: "{{ sc_fix.stdout }}"
 
 # ---- STEP 2: Clean up stuck namespace ----
+#  Simple synchronous wait instead
 - name: Clean up old banking namespace
-  shell: |
-    if kubectl get namespace banking >/dev/null 2>&1; then
-      echo "Namespace exists, cleaning up..."
-
-      kubectl get pvc -n banking -o name 2>/dev/null | while read pvc; do
-        kubectl patch $pvc -n banking \
-          -p '{"metadata":{"finalizers":[]}}' \
-          --type=merge 2>/dev/null || true
-      done
-
-      kubectl get pods -n banking -o name 2>/dev/null | while read pod; do
-        kubectl delete $pod -n banking \
-          --force --grace-period=0 2>/dev/null || true
-      done
-
-      kubectl delete namespace banking --timeout=30s || true
-
-      kubectl get namespace banking -o json 2>/dev/null | \
-        python3 -c "
-    import sys, json
-    d = json.load(sys.stdin)
-    d['spec']['finalizers'] = []
-    print(json.dumps(d))
-    " | kubectl replace --raw /api/v1/namespaces/banking/finalize -f - 2>/dev/null || true
-    else
-      echo "Namespace does not exist, skipping cleanup"
-    fi
-    sleep 5
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-  async: 120
-  poll: 10
-  register: cleanup_job
-
-- name: Wait for namespace cleanup to complete
-  async_status:
-    jid: "{{ cleanup_job.ansible_job_id }}"
+  shell: kubectl delete namespace banking --ignore-not-found=true
   register: cleanup_result
-  until: cleanup_result.finished
+  ignore_errors: yes
+
+- name: Wait for banking namespace to be fully removed
+  shell: kubectl get namespace banking 2>&1 || echo "gone"
+  register: ns_check
+  until: "'gone' in ns_check.stdout or 'NotFound' in ns_check.stderr"
   retries: 12
   delay: 10
+  changed_when: false
 
 # ---- STEP 3: Deploy infrastructure ----
 - name: Deploy infrastructure to Kubernetes
