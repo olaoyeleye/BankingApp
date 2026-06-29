@@ -333,84 +333,84 @@
   debug:
     msg: "{{ service_urls.stdout }}"
 
-# ---- STEP 9: Install ArgoCD ----
-- name: Create ArgoCD namespace
-  shell: |
-    kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
+# # ---- STEP 9: Install ArgoCD ----
+# - name: Create ArgoCD namespace
+#   shell: |
+#     kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
 
-- name: Install ArgoCD
-  shell: |
-    kubectl apply -n argocd \
-      --server-side \
-      -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-  async: 180
-  poll: 15
-  register: argocd_job
+# - name: Install ArgoCD
+#   shell: |
+#     kubectl apply -n argocd \
+#       --server-side \
+#       -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+#   async: 180
+#   poll: 15
+#   register: argocd_job
 
-- name: Wait for ArgoCD install to complete
-  async_status:
-    jid: "{{ argocd_job.ansible_job_id }}"
-  register: argocd_result
-  until: argocd_result.finished
-  retries: 8
-  delay: 15
+# - name: Wait for ArgoCD install to complete
+#   async_status:
+#     jid: "{{ argocd_job.ansible_job_id }}"
+#   register: argocd_result
+#   until: argocd_result.finished
+#   retries: 8
+#   delay: 15
 
-- name: Wait for ArgoCD server to be ready
-  shell: |
-    kubectl wait --for=condition=ready pod \
-      -l app.kubernetes.io/name=argocd-server \
-      -n argocd --timeout=180s
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-  ignore_errors: true
+# - name: Wait for ArgoCD server to be ready
+#   shell: |
+#     kubectl wait --for=condition=ready pod \
+#       -l app.kubernetes.io/name=argocd-server \
+#       -n argocd --timeout=180s
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+#   ignore_errors: true
 
-- name: Get ArgoCD initial admin password
-  shell: |
-    kubectl get secret argocd-initial-admin-secret \
-      -n argocd \
-      -o jsonpath='{.data.password}' | base64 --decode
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-  register: argocd_password
-  ignore_errors: true
+# - name: Get ArgoCD initial admin password
+#   shell: |
+#     kubectl get secret argocd-initial-admin-secret \
+#       -n argocd \
+#       -o jsonpath='{.data.password}' | base64 --decode
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#   register: argocd_password
+#   ignore_errors: true
 
-- name: Print ArgoCD password
-  debug:
-    msg: "ArgoCD admin password: {{ argocd_password.stdout }}"
+# - name: Print ArgoCD password
+#   debug:
+#     msg: "ArgoCD admin password: {{ argocd_password.stdout }}"
 
-- name: Get ArgoCD server URL
-  shell: |
-    kubectl get service argocd-server -n argocd \
-      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
-      2>/dev/null || echo "not ready yet"
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-  register: argocd_url
-  ignore_errors: true
+# - name: Get ArgoCD server URL
+#   shell: |
+#     kubectl get service argocd-server -n argocd \
+#       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+#       2>/dev/null || echo "not ready yet"
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#   register: argocd_url
+#   ignore_errors: true
 
-- name: Print ArgoCD URL
-  debug:
-    msg: "ArgoCD URL: https://{{ argocd_url.stdout }}"
+# - name: Print ArgoCD URL
+#   debug:
+#     msg: "ArgoCD URL: https://{{ argocd_url.stdout }}"
