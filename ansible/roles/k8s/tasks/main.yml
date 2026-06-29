@@ -348,6 +348,7 @@
 - name: Install ArgoCD
   shell: |
     kubectl apply -n argocd \
+      --server-side \
       -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
   become_user: ec2-user
   environment:
@@ -356,7 +357,7 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  async: 120
+  async: 180
   poll: 15
   register: argocd_job
 
