@@ -34,6 +34,7 @@ jobs:
         instance_type           = "${{ secrets.INSTANCE_TYPE }}"
         instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}"
         vpc_name                = "${{ secrets.VPC_NAME }}"
+        key_name                = "${{ secrets.KEY_NAME }}"
         EOF
  
     - name: Terraform Init
@@ -44,9 +45,9 @@ jobs:
       working-directory: ./terraform
       run: terraform plan -out=tfplan
 
-    - name: Terraform destroy
-      working-directory: ./terraform
-      run: terraform destroy -auto-approve   
+    # - name: Terraform destroy
+    #   working-directory: ./terraform
+    #   run: terraform destroy -auto-approve   
 
     - name: Terraform Apply
       working-directory: ./terraform
@@ -267,6 +268,21 @@ jobs:
     #       --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
     #       --extra-vars "frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
 
+    # - name: Get Load Balancer URLs
+    #   id: get-lb-urls
+    #   run: |
+    #     aws eks update-kubeconfig \
+    #       --name ${{ secrets.EKS_CLUSTER_NAME }} \
+    #       --region ${{ secrets.AWS_REGION }}
+
+    #     USER_LB=$(kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    #     TX_LB=$(kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    #     ACTIVITY_LB=$(kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+    #     echo "user_lb=$USER_LB" >> "$GITHUB_OUTPUT"
+    #     echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
+    #     echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
+
     - name: Get Load Balancer URLs
       id: get-lb-urls
       run: |
@@ -274,13 +290,35 @@ jobs:
           --name ${{ secrets.EKS_CLUSTER_NAME }} \
           --region ${{ secrets.AWS_REGION }}
 
-        USER_LB=$(kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-        TX_LB=$(kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-        ACTIVITY_LB=$(kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+        echo "Waiting for banking namespace and load balancers..."
+        USER_LB=""
+        TX_LB=""
+        ACTIVITY_LB=""
+
+        for i in {1..20}; do
+          if kubectl get namespace banking >/dev/null 2>&1; then
+            USER_LB=$(kubectl get service user-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            TX_LB=$(kubectl get service transaction-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            ACTIVITY_LB=$(kubectl get service activity-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+
+            if [ -n "$USER_LB" ] && [ -n "$TX_LB" ] && [ -n "$ACTIVITY_LB" ]; then
+              echo "All load balancers ready"
+              break
+            fi
+          fi
+          echo "Attempt $i: not ready, waiting 30s..."
+          sleep 30
+        done
 
         echo "user_lb=$USER_LB" >> "$GITHUB_OUTPUT"
         echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
         echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
+        echo "User LB: $USER_LB"
+        echo "Transaction LB: $TX_LB"
+        echo "Activity LB: $ACTIVITY_LB"
 
     - name: Update frontend API endpoints
       working-directory: ./techbleat-global-bank-frontend
@@ -312,4 +350,4 @@ jobs:
         ansible-playbook ansible/playbook_frontend.yml \
           --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}" \
           --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
-          --extra-vars "fro1  ntend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
+          --extra-vars "frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
