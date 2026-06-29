@@ -181,7 +181,7 @@
   retries: 12
   delay: 10
 
-# ---- STEP 3: Deploy infra ----
+# ---- STEP 3: Deploy infrastructure ----
 - name: Deploy infrastructure to Kubernetes
   shell: |
     kubectl apply -f /home/ec2-user/k8s/namespace.yml
