@@ -1,0 +1,8 @@
+- name: Configure Nginx instance and deploy Kubernetes resources
+  hosts: nginx
+  become: true
+  vars:
+    kubeconfig_path: /root/.kube/config
+    app_image: my-image
+  roles:
+  - frontend

@@ -1,0 +1,416 @@
+---
+- name: Ensure required packages are installed
+  dnf:
+    name:
+      - unzip
+      - git
+    state: present
+
+- name: Install AWS CLI v2
+  shell: |
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+    unzip -o /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install --update
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Get latest kubectl version
+  uri:
+    url: https://dl.k8s.io/release/stable.txt
+    return_content: yes
+  register: kubectl_version
+
+- name: Download kubectl binary
+  get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+    force: false
+
+- name: Verify kubectl installed
+  command: kubectl version --client
+  register: kubectl_out
+  changed_when: false
+
+- name: Print kubectl version
+  debug:
+    msg: "{{ kubectl_out.stdout }}"
+
+- name: Configure kubeconfig for EKS
+  shell: |
+    mkdir -p /home/ec2-user/.kube
+    aws eks update-kubeconfig \
+      --name "{{ eks_cluster_name }}" \
+      --region "{{ aws_region }}" \
+      --kubeconfig /home/ec2-user/.kube/config
+  become: yes
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Set kubeconfig permissions
+  file:
+    path: /home/ec2-user/.kube/config
+    owner: ec2-user
+    group: ec2-user
+    mode: '0600'
+  ignore_errors: true
+
+- name: Create k8s directory on EC2
+  file:
+    path: /home/ec2-user/k8s
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: '0755'
+
+- name: Copy k8s manifests to EC2
+  copy:
+    src: "{{ playbook_dir }}/../k8s/"
+    dest: /home/ec2-user/k8s/
+    owner: ec2-user
+    group: ec2-user
+    mode: '0644'
+
+- name: Set app image in user-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/user-service.yml
+    regexp: 'YOUR_ECR_URL/user-service:latest'
+    replace: "{{ user_service_image }}"
+
+- name: Set app image in transaction-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/transaction-service.yml
+    regexp: 'YOUR_ECR_URL/transaction-service:latest'
+    replace: "{{ transaction_service_image }}"
+
+- name: Set app image in activity-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/activity-service.yml
+    regexp: 'YOUR_ECR_URL/activity-service:latest'
+    replace: "{{ activity_service_image }}"
+
+- name: Set app image in postgres.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/postgres.yml
+    regexp: 'YOUR_ECR_URL/bank-app-postgres:latest'
+    replace: "{{ postgres_image }}"
+
+- name: Verify image replacement
+  shell: |
+    grep "image:" /home/ec2-user/k8s/user-service.yml
+    grep "image:" /home/ec2-user/k8s/transaction-service.yml
+    grep "image:" /home/ec2-user/k8s/activity-service.yml
+    grep "image:" /home/ec2-user/k8s/postgres.yml
+  become_user: ec2-user
+  register: image_check
+
+- name: Print image values
+  debug:
+    msg: "{{ image_check.stdout }}"
+
+# ---- STEP 1: Fix StorageClass FIRST ----
+- name: Fix StorageClass
+  shell: |
+    kubectl delete storageclass gp2 --ignore-not-found=true
+    sleep 5
+    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
+    kubectl get storageclass
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: sc_fix
+
+- name: Print StorageClass output
+  debug:
+    msg: "{{ sc_fix.stdout }}"
+
+
+
+
+# ---- STEP 2: Clean up stuck namespace ----
+#  Simple synchronous wait instead
+- name: Clean up old banking namespace
+  shell: kubectl delete namespace banking --ignore-not-found=true
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: cleanup_result
+  ignore_errors: yes
+
+- name: Wait for banking namespace to be fully removed
+  shell: kubectl get namespace banking 2>&1 || echo "gone"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  register: ns_check
+  until: "'gone' in ns_check.stdout or 'NotFound' in ns_check.stderr"
+  retries: 12
+  delay: 10
+  changed_when: false
+
+# ---- STEP 3: Deploy infrastructure ----
+- name: Deploy infrastructure to Kubernetes
+  shell: |
+    kubectl apply -f /home/ec2-user/k8s/namespace.yml
+    kubectl apply -f /home/ec2-user/k8s/secret.yml
+    kubectl apply -f /home/ec2-user/k8s/configmap.yml
+    kubectl apply -f /home/ec2-user/k8s/postgres.yml
+    kubectl apply -f /home/ec2-user/k8s/redis.yml
+    kubectl apply -f /home/ec2-user/k8s/kafka.yml
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}" 
+  register: infra_result
+
+- name: Print infra apply output
+  debug:
+    msg: "{{ infra_result.stdout }}"
+
+# ---- STEP 4: Check EBS CSI driver ----
+- name: Check EBS CSI driver pods
+  shell: |
+    kubectl get pods -n kube-system | grep ebs || echo "NO EBS CSI PODS FOUND"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: ebs_check
+
+- name: Print EBS CSI status
+  debug:
+    msg: "{{ ebs_check.stdout }}"
+
+# ---- STEP 5: Check PVC status ----
+- name: Check PVC status
+  shell: |
+    echo "=== PVC Describe ==="
+    kubectl describe pvc postgres-pvc -n banking
+
+    echo "=== PVC ==="
+    kubectl get pvc -n banking
+
+    echo "=== Pod status ==="
+    kubectl get pods -n banking
+
+    echo "=== Postgres events ==="
+    kubectl describe pod -l app=postgres -n banking | grep -A10 "Events:"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: pvc_status
+
+- name: Print PVC status
+  debug:
+    msg: "{{ pvc_status.stdout }}"
+
+# ---- STEP 6: Wait for databases ----
+- name: Wait for postgres
+  shell: |
+    kubectl wait --for=condition=ready pod \
+      -l app=postgres -n banking --timeout=180s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Wait for redis
+  shell: |
+    kubectl wait --for=condition=ready pod \
+      -l app=redis -n banking --timeout=120s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Wait for kafka
+  shell: |
+    kubectl wait --for=condition=ready pod \
+      -l app=kafka -n banking --timeout=300s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ignore_errors: true
+
+- name: Final pod status
+  shell: kubectl get pods -n banking
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: pod_status
+
+- name: Print pod status
+  debug:
+    msg: "{{ pod_status.stdout }}"
+
+# ---- STEP 7: Deploy app services ----
+- name: Deploy app services to Kubernetes
+  shell: |
+    kubectl apply -f /home/ec2-user/k8s/user-service.yml
+    kubectl apply -f /home/ec2-user/k8s/transaction-service.yml
+    kubectl apply -f /home/ec2-user/k8s/activity-service.yml
+    kubectl get all -n banking
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: services_apply
+
+- name: Print services output
+  debug:
+    msg: "{{ services_apply.stdout }}"
+
+# ---- STEP 8: Get service URLs ----
+- name: Get service URLs
+  shell: |
+    echo "=== User Service ==="
+    kubectl get service user-service -n banking \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+      2>/dev/null || echo "not ready"
+    echo ""
+    echo "=== Transaction Service ==="
+    kubectl get service transaction-service -n banking \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+      2>/dev/null || echo "not ready"
+    echo ""
+    echo "=== Activity Service ==="
+    kubectl get service activity-service -n banking \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+      2>/dev/null || echo "not ready"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  register: service_urls
+  ignore_errors: true
+
+- name: Print service URLs
+  debug:
+    msg: "{{ service_urls.stdout }}"
+
+# # ---- STEP 9: Install ArgoCD ----
+# - name: Create ArgoCD namespace
+#   shell: |
+#     kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+# - name: Install ArgoCD
+#   shell: |
+#     kubectl apply -n argocd \
+#       --server-side \
+#       -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+#   async: 180
+#   poll: 15
+#   register: argocd_job
+
+# - name: Wait for ArgoCD install to complete
+#   async_status:
+#     jid: "{{ argocd_job.ansible_job_id }}"
+#   register: argocd_result
+#   until: argocd_result.finished
+#   retries: 8
+#   delay: 15
+
+# - name: Wait for ArgoCD server to be ready
+#   shell: |
+#     kubectl wait --for=condition=ready pod \
+#       -l app.kubernetes.io/name=argocd-server \
+#       -n argocd --timeout=180s
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+#   ignore_errors: true
+
+# - name: Get ArgoCD initial admin password
+#   shell: |
+#     kubectl get secret argocd-initial-admin-secret \
+#       -n argocd \
+#       -o jsonpath='{.data.password}' | base64 --decode
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#   register: argocd_password
+#   ignore_errors: true
+
+# - name: Print ArgoCD password
+#   debug:
+#     msg: "ArgoCD admin password: {{ argocd_password.stdout }}"
+
+# - name: Get ArgoCD server URL
+#   shell: |
+#     kubectl get service argocd-server -n argocd \
+#       -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+#       2>/dev/null || echo "not ready yet"
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#   register: argocd_url
+#   ignore_errors: true
+
+# - name: Print ArgoCD URL
+#   debug:
+#     msg: "ArgoCD URL: https://{{ argocd_url.stdout }}"

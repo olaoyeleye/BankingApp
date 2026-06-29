@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-frontend
+  namespace: banking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bank-frontend
+  template:
+    metadata:
+      labels:
+        app: bank-frontend
+    spec:
+      containers:
+        - name: bank-frontend
+          image: YOUR_ECR_URL/bank-frontend:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: NODE_ENV
+          envFrom:
+            - configMapRef:
+                name: banking-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-frontend
+  namespace: banking
+spec:
+  selector:
+    app: bank-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: LoadBalancer
