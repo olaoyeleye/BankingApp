@@ -132,15 +132,29 @@
   debug:
     msg: "{{ sc_fix.stdout }}"
 
+
+
+
 # ---- STEP 2: Clean up stuck namespace ----
 #  Simple synchronous wait instead
 - name: Clean up old banking namespace
   shell: kubectl delete namespace banking --ignore-not-found=true
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: cleanup_result
   ignore_errors: yes
 
 - name: Wait for banking namespace to be fully removed
   shell: kubectl get namespace banking 2>&1 || echo "gone"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
   register: ns_check
   until: "'gone' in ns_check.stdout or 'NotFound' in ns_check.stderr"
   retries: 12
@@ -164,7 +178,7 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   async: 300
-  poll: 15
+  poll: 0 # <--- CHANGED FROM 15 TO 0 TO ENABLE ASYNC STATUS TRACKING
   register: infra_job
 
 - name: Wait for infra deploy to complete
@@ -174,6 +188,9 @@
   until: infra_result.finished
   retries: 20
   delay: 15
+
+
+  
 
 - name: Print infra apply output
   debug:
