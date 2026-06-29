@@ -1,0 +1,356 @@
+name: Deploy Entire Infra
+
+on:
+  push:
+    branches: ["main", "feat-dev"]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform action to run'
+        required: true
+        default: 'destroy'
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_wrapper: false
+
+    - name: Create terraform.tfvars
+      working-directory: ./terraform
+      run: |
+        cat > terraform.tfvars <<EOF
+        region                 = "${{ secrets.AWS_REGION }}"
+        ami                    = "${{ secrets.AMI_ID }}"
+        instance_type           = "${{ secrets.INSTANCE_TYPE }}"
+        instance-name-nginx     = "${{ secrets.INSTANCE_NAME_NGINX }}"
+        vpc_name                = "${{ secrets.VPC_NAME }}"
+        key_name                = "${{ secrets.KEY_NAME }}"
+        EOF
+ 
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init 
+
+
+
+    - name: Import Existing OIDC Provider if it exists 
+      working-directory: ./terraform
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        echo "Fetching OIDC Issuer URL from EKS..."
+        
+        # Run the command without masking errors so we can see the exact AWS message
+        OIDC_URL=$(aws eks describe-cluster \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} \
+          --query "cluster.identity.oidc.issuer" \
+          --output text)
+        
+        # Check if the AWS CLI command itself failed (exit code not 0)
+        if [ $? -ne 0 ]; then
+          echo "ERROR: AWS CLI command failed with exit code $?."
+          echo "Please verify that your cluster name '${{ secrets.EKS_CLUSTER_NAME }}' and region '${{ secrets.AWS_REGION }}' match your active AWS infrastructure."
+          exit 1
+        fi
+
+        # Validate the string format
+        if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
+          echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
+          exit 1
+        fi
+        echo "Valid OIDC Issuer URL found: $OIDC_URL"
+
+        ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+        PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
+
+        echo "Checking if OIDC Provider needs to be imported into state..."
+        if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
+          echo "Importing existing provider: $PROVIDER_ARN"
+          terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
+        else
+          echo "OIDC Provider is already tracked in state."
+        fi
+
+    - name: Clear Pre-existing Addon Conflicts
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        aws eks delete-addon \
+          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --addon-name aws-ebs-csi-driver \
+          --region ${{ secrets.AWS_REGION }} || echo "Addon not found, moving on..."
+          
+        aws eks wait addon-deleted \
+          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --addon-name aws-ebs-csi-driver \
+          --region ${{ secrets.AWS_REGION }} || echo "Done waiting."
+
+
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: terraform plan -out=tfplan
+
+    - name: Terraform Apply
+      working-directory: ./terraform
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: terraform apply -auto-approve tfplan   
+
+
+
+    - name: Terraform Plan (Destroy)
+      working-directory: ./terraform
+      if: github.event.inputs.terraform_action == 'destroy'
+      run: terraform plan -destroy -out=tfplan
+
+    - name: Terraform Destroy
+      working-directory: ./terraform
+      if: github.event.inputs.terraform_action == 'destroy'
+      run: terraform apply -auto-approve tfplan 
+        
+    - name: Login to Amazon ECR 
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, Tag and Push image to ECR (User)
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: build-user-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-user-service
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./user-service
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Build, Tag and Push image to ECR (Transaction)
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: build-transaction-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-transaction-service
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./transaction-service 
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Build, Tag and Push image to ECR (Activity)
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: build-activity-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-activity-service
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./activity-service
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Build, Tag and Push image to ECR (Postgres Init)
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: build-postgres-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-postgres
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-backend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./db-init
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Install Ansible
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install ansible boto3 botocore
+
+    - name: Install kubectl
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Install eksctl
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        curl --silent --location \
+          "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
+          | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
+
+    - name: Get Nginx public IP
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: nginx-ip
+      working-directory: ./terraform
+      run: |
+        echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> $GITHUB_OUTPUT
+
+    - name: Save SSH private key
+      if: github.event.inputs.terraform_action != 'destroy'
+      env:
+        SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+      run: |
+        mkdir -p /home/runner/.ssh
+        echo "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
+        chmod 600 /home/runner/.ssh/ansible_key.pem
+
+    - name: Wait for EC2 to be ready
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        for i in {1..12}; do
+          ssh -i /home/runner/.ssh/ansible_key.pem \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=5 \
+            ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }} \
+            "echo ready" && break
+          echo "Attempt $i failed, waiting 15s..."
+          sleep 15
+        done
+
+    - name: Map EC2 IAM identity inside EKS
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        aws eks update-kubeconfig \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} 
+
+        eksctl create iamidentitymapping \
+          --cluster ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} \
+          --arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.VPC_NAME }}-ec2-eks-role \
+          --username ec2-eks-role \
+          --group system:masters \
+          --no-duplicate-arns
+
+    - name: Create Ansible inventory
+      if: github.event.inputs.terraform_action != 'destroy'
+      run: |
+        cat > ansible/hosts.ini <<EOF
+        [nginx]
+        nginx ansible_host=${{ steps.nginx-ip.outputs.NGINX_IP }}
+
+        [nginx:vars]
+        ansible_user=ec2-user
+        ansible_ssh_private_key_file=/home/runner/.ssh/ansible_key.pem
+        ansible_ssh_common_args='-o StrictHostKeyChecking=no -o IdentitiesOnly=yes'
+        aws_region=${{ secrets.AWS_REGION }}
+        eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}
+        EOF
+
+    - name: Run Ansible playbook
+      if: github.event.inputs.terraform_action != 'destroy'
+      working-directory: ./ansible 
+      run: |
+        ANSIBLE_CONFIG=ansible.cfg \
+        ansible-playbook playbook.yml \
+          --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }} \
+                        aws_region=${{ secrets.AWS_REGION }} \
+                        user_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-user-service:${{ github.sha }} \
+                        transaction_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }} \
+                        postgres_image=${{ steps.login-ecr.outputs.registry }}/bank-app-postgres:${{ github.sha }} \
+                        activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
+
+
+    - name: Get Load Balancer URLs
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: get-lb-urls
+      run: |
+        aws eks update-kubeconfig \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }}
+
+        echo "Waiting for banking namespace and load balancers..."
+        USER_LB=""
+        TX_LB=""
+        ACTIVITY_LB=""
+
+        for i in {1..20}; do
+          if kubectl get namespace banking >/dev/null 2>&1; then
+            USER_LB=$(kubectl get service user-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            TX_LB=$(kubectl get service transaction-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            ACTIVITY_LB=$(kubectl get service activity-service -n banking \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+
+            if [ -n "$USER_LB" ] && [ -n "$TX_LB" ] && [ -n "$ACTIVITY_LB" ]; then
+              echo "All load balancers ready"
+              break
+            fi
+          fi
+          echo "Attempt $i: not ready, waiting 30s..."
+          sleep 30
+        done
+
+        echo "user_lb=$USER_LB" >> "$GITHUB_OUTPUT"
+        echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
+        echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
+        echo "User LB: $USER_LB"
+        echo "Transaction LB: $TX_LB"
+        echo "Activity LB: $ACTIVITY_LB"
+
+    - name: Update frontend API endpoints
+      if: github.event.inputs.terraform_action != 'destroy'
+      working-directory: ./techbleat-global-bank-frontend
+      run: |
+        sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "http://${{ steps.get-lb-urls.outputs.user_lb }}:8000";|' src/App.jsx
+        sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "http://${{ steps.get-lb-urls.outputs.tx_lb }}:8080";|' src/App.jsx
+        sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "http://${{ steps.get-lb-urls.outputs.activity_lb }}:8001";|' src/App.jsx
+
+    - name: Build, Tag and Push frontend image to ECR
+      if: github.event.inputs.terraform_action != 'destroy'
+      id: build-frontend-service
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: bank-app-frontend
+        IMAGE_TAG: ${{ github.sha }}
+      working-directory: ./techbleat-global-bank-frontend
+      run: | 
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+
+    - name: Run Ansible playbook
+      if: github.event.inputs.terraform_action != 'destroy'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        ANSIBLE_CONFIG=ansible/ansible.cfg \
+        ansible-playbook ansible/playbook_frontend.yml \
+          --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}" \
+          --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
+          --extra-vars "frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"

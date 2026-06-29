@@ -1,0 +1,16 @@
+# Generate SSH keypair for instance access
+resource "tls_private_key" "deployer" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "deployer" {
+  key_name   = "${var.key_name}"
+  public_key = tls_private_key.deployer.public_key_openssh
+}
+resource "local_file" "ssh_key" {
+  filename        = "${path.module}/${var.vpc_name}-deployer-key.pem"
+  content         = tls_private_key.deployer.private_key_pem
+  file_permission = "0400"
+}
+

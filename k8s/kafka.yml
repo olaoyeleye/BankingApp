@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: banking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:8.1.1
+          ports:
+            - containerPort: 9092
+            - containerPort: 9101
+            - containerPort: 29092
+            - containerPort: 29093
+          envFrom:
+            - configMapRef:
+                name: banking-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: banking
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: plaintext
+      port: 29092
+      targetPort: 29092
+    - name: external
+      port: 9092
+      targetPort: 9092
+    - name: jmx
+      port: 9101
+      targetPort: 9101
+    - name: controller
+      port: 29093
+      targetPort: 29093
+  type: ClusterIP
