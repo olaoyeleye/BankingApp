@@ -156,12 +156,12 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform plan -out=tfplan
 
     - name: Terraform Apply
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform apply -auto-approve tfplan   
 
     - name: Clean up Kubernetes Load Balancers before destroy
