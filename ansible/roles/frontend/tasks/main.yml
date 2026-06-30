@@ -38,3 +38,7 @@
 - name: Print infra apply output
   debug:
     msg: "{{ infra_apply.stdout }}"
+
+
+
+
