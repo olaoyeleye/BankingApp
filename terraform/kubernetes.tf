@@ -101,14 +101,14 @@ resource "aws_launch_template" "eks_nodes" {
     http_put_response_hop_limit = 2          # ← critical fix - must be 2+ for pods
   }
 
-#  block_device_mappings {
-#    device_name = "/dev/xvda"
-#    ebs {
-#      volume_size           = 100
-#      volume_type           = "gp3"
-#      delete_on_termination = true
-#    }
-#  }
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 100
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
 
   network_interfaces {
     security_groups = [aws_security_group.public-kunle-sg.id]
@@ -131,7 +131,7 @@ resource "aws_eks_node_group" "main" {
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD" 
-  disk_size       = 100  
+ 
 
 
   subnet_ids      = [
