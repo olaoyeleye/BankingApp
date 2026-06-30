@@ -72,6 +72,12 @@ resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
 
+
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
+
   vpc_config {
     subnet_ids = [
       aws_subnet.public-kunle-subnet.id,
@@ -80,9 +86,16 @@ resource "aws_eks_cluster" "main" {
     endpoint_private_access = true
     endpoint_public_access  = true
   }
+  
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
+
+resource "aws_eks_access_entry" "node_role" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = aws_iam_role.eks_nodes.arn
+  type          = "EC2_LINUX"
+}
 
 #data "aws_ssm_parameter" "eks_ami" {
 #  name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.main.version}/amazon-linux-2/recommended/image_id"
@@ -154,7 +167,8 @@ resource "aws_eks_node_group" "main" {
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_registry_policy
+    aws_iam_role_policy_attachment.eks_registry_policy,
+    aws_eks_access_entry.node_role 
   ]
 }
 
