@@ -84,15 +84,15 @@ resource "aws_eks_cluster" "main" {
 }
 
 
-data "aws_ssm_parameter" "eks_ami" {
-  name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.main.version}/amazon-linux-2/recommended/image_id"
-}
+#data "aws_ssm_parameter" "eks_ami" {
+#  name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.main.version}/amazon-linux-2/recommended/image_id"
+#}
 
 
 resource "aws_launch_template" "eks_nodes" {
   name_prefix = "eks-nodes-"
   description = "Launch template for EKS nodes"
-  image_id      = data.aws_ssm_parameter.eks_ami.value  
+  #image_id      = data.aws_ssm_parameter.eks_ami.value  
   instance_type = "t3.small"
   
     metadata_options {
@@ -130,7 +130,8 @@ resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
-  
+  ami_type        = "AL2023_x86_64_STANDARD" 
+
   subnet_ids      = [
     aws_subnet.public-kunle-subnet.id,
     aws_subnet.public-kunle-subnet-2.id
