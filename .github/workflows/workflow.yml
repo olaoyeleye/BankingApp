@@ -317,6 +317,11 @@ jobs:
           --username ec2-eks-role \
           --group system:masters \
           --no-duplicate-arns
+    - name: Download AWS Load Balancer Controller IAM Policy
+      run: |
+        cd terraform/ # Change this to the exact directory where your kubernetes.tf file lives
+        curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
+
 
     - name: Create Ansible inventory
       if: github.event.inputs.terraform_action != 'destroy'
