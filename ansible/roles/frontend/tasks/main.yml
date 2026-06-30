@@ -37,6 +37,16 @@
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: infra_apply
 
+
+- name: Wait for Ingress ALB to receive an address
+  shell: |
+    kubectl wait --namespace banking --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' ingress/banking-ingress --timeout=300s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+
+    
 - name: Print infra apply output
   debug:
     msg: "{{ infra_apply.stdout }}"

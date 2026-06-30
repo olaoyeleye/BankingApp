@@ -240,3 +240,86 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_iam_role_policy_attachment.eks_nodes_ebs_csi
   ]
 }
+
+
+
+
+
+
+
+
+
+# ==============================================================================
+# 4. AWS Load Balancer Controller IAM & Helm Installation
+# ==============================================================================
+
+# 4a. Create the IAM Role for the Load Balancer Controller
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  name = "${var.vpc_name}-aws-load-balancer-controller-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.eks.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# 4b. Create the AWS Load Balancer Controller IAM Policy
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
+  description = "IAM Policy for AWS Load Balancer Controller"
+  policy      = file("${path.module}/iam_policy.json") 
+}
+
+# 4c. Attach the Policy to the Role
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
+  role       = aws_iam_role.aws_load_balancer_controller.name
+}
+
+# 4d. Automatically deploy the Controller Pods into EKS via Helm
+resource "helm_release" "aws_load_balancer_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+  version    = "1.7.2" # Matches the version string of your policy
+
+  set {
+    name  = "clusterName"
+    value = aws_eks_cluster.main.name
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.aws_load_balancer_controller.arn
+  }
+
+  # CRITICAL: Wait until the EKS worker nodes are online before installing software
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.aws_load_balancer_controller
+  ]
+}
