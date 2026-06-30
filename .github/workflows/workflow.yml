@@ -66,43 +66,78 @@ jobs:
 
 
 
+    # - name: Import Existing OIDC Provider if it exists 
+    #   working-directory: ./terraform
+    #   if: github.event.inputs.terraform_action != 'destroy'
+    #   run: |
+    #     echo "Fetching OIDC Issuer URL from EKS..."
+        
+    #     # Run the command without masking errors so we can see the exact AWS message
+    #     OIDC_URL=$(aws eks describe-cluster \
+    #       --name ${{ secrets.EKS_CLUSTER_NAME }} \
+    #       --region ${{ secrets.AWS_REGION }} \
+    #       --query "cluster.identity.oidc.issuer" \
+    #       --output text)
+        
+    #     # Check if the AWS CLI command itself failed (exit code not 0)
+    #     if [ $? -ne 0 ]; then
+    #       echo "ERROR: AWS CLI command failed with exit code $?."
+    #       echo "Please verify that your cluster name '${{ secrets.EKS_CLUSTER_NAME }}' and region '${{ secrets.AWS_REGION }}' match your active AWS infrastructure."
+    #       exit 1
+    #     fi
+
+    #     # Validate the string format
+    #     if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
+    #       echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
+    #       exit 1
+    #     fi
+    #     echo "Valid OIDC Issuer URL found: $OIDC_URL"
+
+    #     ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+    #     PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
+
+    #     echo "Checking if OIDC Provider needs to be imported into state..."
+    #     if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
+    #       echo "Importing existing provider: $PROVIDER_ARN"
+    #       terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
+    #     else
+    #       echo "OIDC Provider is already tracked in state."
+    #     fi
     - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
       if: github.event.inputs.terraform_action != 'destroy'
       run: |
-        echo "Fetching OIDC Issuer URL from EKS..."
+        echo "Checking if EKS cluster exists..."
+        CLUSTER_EXISTS=$(aws eks list-clusters --region ${{ secrets.AWS_REGION }} --query "clusters[?@=='${{ secrets.EKS_CLUSTER_NAME }}']" --output text)
         
-        # Run the command without masking errors so we can see the exact AWS message
-        OIDC_URL=$(aws eks describe-cluster \
-          --name ${{ secrets.EKS_CLUSTER_NAME }} \
-          --region ${{ secrets.AWS_REGION }} \
-          --query "cluster.identity.oidc.issuer" \
-          --output text)
-        
-        # Check if the AWS CLI command itself failed (exit code not 0)
-        if [ $? -ne 0 ]; then
-          echo "ERROR: AWS CLI command failed with exit code $?."
-          echo "Please verify that your cluster name '${{ secrets.EKS_CLUSTER_NAME }}' and region '${{ secrets.AWS_REGION }}' match your active AWS infrastructure."
-          exit 1
-        fi
-
-        # Validate the string format
-        if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
-          echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
-          exit 1
-        fi
-        echo "Valid OIDC Issuer URL found: $OIDC_URL"
-
-        ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-        PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
-
-        echo "Checking if OIDC Provider needs to be imported into state..."
-        if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
-          echo "Importing existing provider: $PROVIDER_ARN"
-          terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
+        if [ -z "$CLUSTER_EXISTS" ]; then
+          echo "Cluster '${{ secrets.EKS_CLUSTER_NAME }}' does not exist yet. Skipping OIDC import for fresh installation."
         else
-          echo "OIDC Provider is already tracked in state."
+          echo "Cluster found. Fetching OIDC Issuer URL..."
+          OIDC_URL=$(aws eks describe-cluster \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "cluster.identity.oidc.issuer" \
+            --output text)
+
+          if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
+            echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
+            exit 1
+          fi
+          echo "Valid OIDC Issuer URL found: $OIDC_URL"
+
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
+
+          echo "Checking if OIDC Provider needs to be imported into state..."
+          if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
+            echo "Importing existing provider: $PROVIDER_ARN"
+            terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || echo "Already imported or skipping..."
+          else
+            echo "OIDC Provider is already tracked in state."
+          fi
         fi
+
 
     - name: Clear Pre-existing Addon Conflicts
       if: github.event.inputs.terraform_action != 'destroy'
