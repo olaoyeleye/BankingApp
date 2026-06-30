@@ -1,16 +1,17 @@
 ---
 - name: Copy frontend manifests to EC2
-  copy:
+  ansible.builtin.copy:
     src: "{{ playbook_dir }}/../techbleat-global-bank-frontend/manifest/"
     dest: /home/ec2-user/k8s/
     owner: ec2-user
     group: ec2-user
-    mode: '0644'
+    mode: "0644"
+    directory_mode: "0755"
 
 - name: Set app image in frontend.yml
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/frontend.yml
-    regexp: 'YOUR_ECR_URL/bank-frontend:latest'
+    regexp: "YOUR_ECR_URL/bank-frontend:latest"
     replace: "{{ frontend_service_image }}"
 
 - name: Update kubeconfig for EKS cluster
@@ -19,15 +20,13 @@
     HOME: /home/ec2-user
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-  command: >
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ansible.builtin.command: >
     aws eks update-kubeconfig
     --name {{ eks_cluster_name }}
     --region {{ aws_region }}
 
-- name: Deploy infrastructure to Kubernetes
-  shell: |
-    kubectl apply -f /home/ec2-user/k8s/frontend.yml
-    kubectl apply -f /home/ec2-user/k8s/ingress.yml
+- name: Deploy frontend and ingress manifests
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
@@ -35,22 +34,38 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ansible.builtin.shell: |
+    kubectl apply -f /home/ec2-user/k8s/frontend.yml
+    kubectl apply -f /home/ec2-user/k8s/ingress.yml
   register: infra_apply
 
-
-- name: Wait for Ingress ALB to receive an address
-  shell: |
-    kubectl wait --namespace banking --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' ingress/banking-ingress --timeout=300s
+- name: Wait for ingress ALB hostname
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
+  ansible.builtin.command: >
+    kubectl wait
+    --namespace banking
+    --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+    ingress/banking-ingress
+    --timeout=300s
 
-    
+- name: Get ingress ALB hostname
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+  ansible.builtin.command: >
+    kubectl get ingress banking-ingress
+    -n banking
+    -o jsonpath={.status.loadBalancer.ingress[0].hostname}
+  register: ingress_hostname
+
 - name: Print infra apply output
-  debug:
+  ansible.builtin.debug:
     msg: "{{ infra_apply.stdout }}"
 
-
-
-
+- name: Print ingress endpoint
+  ansible.builtin.debug:
+    msg: "Ingress endpoint: http://{{ ingress_hostname.stdout }}"
