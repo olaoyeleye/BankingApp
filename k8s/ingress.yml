@@ -18,20 +18,23 @@ spec:
                 name: user-service
                 port:
                   number: 8000
-          - path: /api/transactions
+
+          - path: /transactions
             pathType: Prefix
             backend:
               service:
                 name: transaction-service
                 port:
                   number: 8080
-          - path: /api/activity
+
+          - path: /activity
             pathType: Prefix
             backend:
               service:
                 name: activity-service
                 port:
                   number: 8001
+
           - path: /
             pathType: Prefix
             backend:
