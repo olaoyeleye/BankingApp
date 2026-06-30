@@ -2,13 +2,13 @@ name: Deploy Entire Infra
 
 on:
   push:
-    branches: ["main", "feat-dev"]
+    branches: ["main", "feat-dev", "master"]
   workflow_dispatch:
     inputs:
       terraform_action:
         description: 'Terraform action to run'
         required: true
-        default: 'destroy'
+        default: 'apply'
         type: choice
         options:
           - apply
