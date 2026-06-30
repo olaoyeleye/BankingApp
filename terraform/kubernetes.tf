@@ -93,7 +93,7 @@ resource "aws_launch_template" "eks_nodes" {
   name_prefix = "eks-nodes-"
   description = "Launch template for EKS nodes"
   image_id      = data.aws_ssm_parameter.eks_ami.value  
-  instance_types = ["t3.small"]
+  instance_type = "t3.small"
   
     metadata_options {
     http_endpoint               = "enabled"
