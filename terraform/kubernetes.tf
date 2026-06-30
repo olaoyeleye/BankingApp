@@ -20,6 +20,33 @@ resource "aws_iam_role" "eks_cluster" {
   })
 }
 
+
+
+
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_eks_access_entry" "ci_admin" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = data.aws_caller_identity.current.arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "ci_admin_policy" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = data.aws_caller_identity.current.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.ci_admin]
+}
+
+
+
+
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
   role       = aws_iam_role.eks_cluster.name
@@ -152,9 +179,9 @@ resource "aws_eks_node_group" "main" {
     aws_subnet.public-kunle-subnet-2.id
   ]
   scaling_config {
-    desired_size = 3
-    max_size     = 4
-    min_size     = 3
+    desired_size = 2
+    max_size     = 3
+    min_size     = 2
   }
 
   launch_template {
@@ -231,7 +258,8 @@ resource "aws_eks_addon" "ebs_csi" {
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
-    aws_iam_role_policy_attachment.eks_nodes_ebs_csi
+    aws_iam_role_policy_attachment.eks_nodes_ebs_csi,
+    aws_iam_openid_connect_provider.eks 
   ]
 }
 
