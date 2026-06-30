@@ -2,21 +2,17 @@ name: Deploy Entire Infra
 
 on:
   push:
-    branches: [main, feat-dev, master]
+    branches: ["main", "feat-dev", "master"]
   workflow_dispatch:
     inputs:
       terraform_action:
-        description: Terraform action to run
+        description: "Terraform action to run"
         required: true
-        default: apply
+        default: "apply"
         type: choice
         options:
           - apply
           - destroy
-
-permissions:
-  id-token: write
-  contents: read
 
 jobs:
   deploy:
@@ -40,8 +36,13 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -54,27 +55,25 @@ jobs:
         shell: bash
         run: |
           cat > terraform.tfvars <<EOF
-          region               = "${{ secrets.AWS_REGION }}"
-          ami                  = "${{ secrets.AMI_ID }}"
-          instance_type        = "${{ secrets.INSTANCE_TYPE }}"
-          instance-name-nginx  = "${{ secrets.INSTANCE_NAME_NGINX }}"
-          vpc_name             = "${{ secrets.VPC_NAME }}"
-          key_name             = "${{ secrets.KEY_NAME }}"
+          region                = "${{ secrets.AWS_REGION }}"
+          ami                   = "${{ secrets.AMI_ID }}"
+          instance_type         = "${{ secrets.INSTANCE_TYPE }}"
+          instance-name-nginx   = "${{ secrets.INSTANCE_NAME_NGINX }}"
+          vpc_name              = "${{ secrets.VPC_NAME }}"
+          key_name              = "${{ secrets.KEY_NAME }}"
           EOF
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
 
       - name: Download AWS Load Balancer Controller IAM Policy
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
         run: |
-          curl -Lo iam_policy.json \
-            https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json
+          curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
-      - name: Terraform Init
-        working-directory: ./terraform
-        run: terraform init
-
-      # Optional OIDC import for existing clusters
       - name: Import Existing OIDC Provider if it exists
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
@@ -100,6 +99,7 @@ jobs:
               echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
               exit 1
             fi
+
             echo "Valid OIDC Issuer URL found: $OIDC_URL"
 
             ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
@@ -124,7 +124,14 @@ jobs:
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
-      # Pre-destroy cleanup of k8s LoadBalancers
+      - name: Install kubectl
+        if: steps.set-action.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
       - name: Clean up Kubernetes Load Balancers before destroy
         if: steps.set-action.outputs.action == 'destroy'
         shell: bash
@@ -151,9 +158,6 @@ jobs:
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
-      # ----------------------------------------------------------------------
-      # Build & push backend images to ECR
-      # ----------------------------------------------------------------------
       - name: Login to Amazon ECR
         if: steps.set-action.outputs.action != 'destroy'
         id: login-ecr
@@ -167,6 +171,7 @@ jobs:
           ECR_REPOSITORY: bank-app-user-service
           IMAGE_TAG: ${{ github.sha }}
         working-directory: ./techbleat-global-bank-backend
+        shell: bash
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./user-service
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -181,6 +186,7 @@ jobs:
           ECR_REPOSITORY: bank-app-transaction-service
           IMAGE_TAG: ${{ github.sha }}
         working-directory: ./techbleat-global-bank-backend
+        shell: bash
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./transaction-service
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -195,6 +201,7 @@ jobs:
           ECR_REPOSITORY: bank-app-activity-service
           IMAGE_TAG: ${{ github.sha }}
         working-directory: ./techbleat-global-bank-backend
+        shell: bash
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./activity-service
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -209,23 +216,23 @@ jobs:
           ECR_REPOSITORY: bank-app-postgres
           IMAGE_TAG: ${{ github.sha }}
         working-directory: ./techbleat-global-bank-backend
+        shell: bash
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./db-init
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
-      # ----------------------------------------------------------------------
-      # Tooling: Ansible, kubectl, eksctl
-      # ----------------------------------------------------------------------
       - name: Install Ansible
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install ansible boto3 botocore
 
       - name: Install kubectl
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
@@ -233,19 +240,18 @@ jobs:
 
       - name: Install eksctl
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           curl --silent --location \
             "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
             | tar xz -C /tmp
           sudo mv /tmp/eksctl /usr/local/bin
 
-      # ----------------------------------------------------------------------
-      # EC2 + EKS identity mapping and Ansible
-      # ----------------------------------------------------------------------
       - name: Get Nginx public IP
         if: steps.set-action.outputs.action != 'destroy'
         id: nginx-ip
         working-directory: ./terraform
+        shell: bash
         run: |
           echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> "$GITHUB_OUTPUT"
 
@@ -253,6 +259,7 @@ jobs:
         if: steps.set-action.outputs.action != 'destroy'
         env:
           SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+        shell: bash
         run: |
           mkdir -p /home/runner/.ssh
           echo "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
@@ -260,6 +267,7 @@ jobs:
 
       - name: Wait for EC2 to be ready
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           for i in {1..12}; do
             ssh -i /home/runner/.ssh/ansible_key.pem \
@@ -273,6 +281,7 @@ jobs:
 
       - name: Map EC2 IAM identity inside EKS
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           aws eks update-kubeconfig \
             --name "${{ secrets.EKS_CLUSTER_NAME }}" \
@@ -288,6 +297,7 @@ jobs:
 
       - name: Create Ansible inventory
         if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
         run: |
           cat > ansible/hosts.ini <<EOF
           [nginx]
@@ -304,6 +314,7 @@ jobs:
       - name: Run Ansible playbook (backend)
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./ansible
+        shell: bash
         run: |
           ANSIBLE_CONFIG=ansible.cfg \
           ansible-playbook playbook.yml \
@@ -314,9 +325,6 @@ jobs:
             --extra-vars "postgres_image=${{ steps.login-ecr.outputs.registry }}/bank-app-postgres:${{ github.sha }}" \
             --extra-vars "activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
 
-      # ----------------------------------------------------------------------
-      # Frontend build, deploy, and ALB discovery
-      # ----------------------------------------------------------------------
       - name: Get Load Balancer URLs
         if: steps.set-action.outputs.action != 'destroy'
         id: get-lb-urls
@@ -333,12 +341,9 @@ jobs:
 
           for i in {1..20}; do
             if kubectl get namespace banking >/dev/null 2>&1; then
-              USER_LB=$(kubectl get service user-service -n banking \
-                -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-              TX_LB=$(kubectl get service transaction-service -n banking \
-                -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-              ACTIVITY_LB=$(kubectl get service activity-service -n banking \
-                -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+              USER_LB=$(kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+              TX_LB=$(kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+              ACTIVITY_LB=$(kubectl get service activity-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
 
               if [ -n "$USER_LB" ] && [ -n "$TX_LB" ] && [ -n "$ACTIVITY_LB" ]; then
                 echo "All load balancers ready"
@@ -352,9 +357,6 @@ jobs:
           echo "user_lb=$USER_LB" >> "$GITHUB_OUTPUT"
           echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
           echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
-          echo "User LB: $USER_LB"
-          echo "Transaction LB: $TX_LB"
-          echo "Activity LB: $ACTIVITY_LB"
 
       - name: Update frontend API endpoints
         if: steps.set-action.outputs.action != 'destroy'
@@ -373,6 +375,7 @@ jobs:
           ECR_REPOSITORY: bank-app-frontend
           IMAGE_TAG: ${{ github.sha }}
         working-directory: ./techbleat-global-bank-frontend
+        shell: bash
         run: |
           docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -382,7 +385,9 @@ jobs:
       - name: Run Ansible playbook (frontend)
         if: steps.set-action.outputs.action != 'destroy'
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        shell: bash
         run: |
           ANSIBLE_CONFIG=ansible/ansible.cfg \
           ansible-playbook ansible/playbook_frontend.yml \
@@ -402,8 +407,7 @@ jobs:
           echo "Waiting for Ingress ALB address..."
           INGRESS_ALB=""
           for i in {1..20}; do
-            INGRESS_ALB=$(kubectl get ingress banking-ingress -n banking \
-              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            INGRESS_ALB=$(kubectl get ingress banking-ingress -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
             if [ -n "$INGRESS_ALB" ]; then
               break
             fi
