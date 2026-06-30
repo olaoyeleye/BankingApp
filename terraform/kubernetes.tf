@@ -104,47 +104,49 @@ resource "aws_eks_access_entry" "node_role" {
   type          = "EC2_LINUX"
 }
 
-resource "aws_launch_template" "eks_nodes" {
-  name_prefix   = "eks-nodes-"
-  description   = "Launch template for EKS nodes"
-  instance_type = "t3.medium"
+#resource "aws_launch_template" "eks_nodes" {
+#  name_prefix   = "eks-nodes-"
+#  description   = "Launch template for EKS nodes"
+#  instance_type = "t3.medium"
 
-  metadata_options {
-    http_endpoint               = "enabled"
-    http_tokens                 = "required"
-    http_put_response_hop_limit = 2
-  }
+#  metadata_options {
+#    http_endpoint               = "enabled"
+#    http_tokens                 = "required"
+#    http_put_response_hop_limit = 2
+#  }
 
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 100
-      volume_type           = "gp3"
-      delete_on_termination = true
-    }
-  }
+#  block_device_mappings {
+#    device_name = "/dev/xvda"
+#    ebs {
+#      volume_size           = 100
+#      volume_type           = "gp3"
+#      delete_on_termination = true
+#    }
+#  }
 
-  network_interfaces {
-    security_groups = [aws_security_group.public-kunle-sg.id]
-  }
+#  network_interfaces {
+#    security_groups = [aws_security_group.public-kunle-sg.id]
+#  }
 
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "EKS-Node"
-    }
-  }
+#  tag_specifications {
+#    resource_type = "instance"
+#    tags = {
+#      Name = "EKS-Node"
+#    }
+#  }
 
-  lifecycle {
-    create_before_destroy = true
-  }
-}
+#  lifecycle {
+#    create_before_destroy = true
+#  }
+#}
 
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
+  instance_type = ["t3.micro"]
+
 
   subnet_ids = [
     aws_subnet.public-kunle-subnet.id,
@@ -152,19 +154,19 @@ resource "aws_eks_node_group" "main" {
   ]
 
   scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 2
+    desired_size = 3
+    max_size     = 4
+    min_size     = 3
   }
 
   update_config {
     max_unavailable = 1
   }
 
-  launch_template {
-    id      = aws_launch_template.eks_nodes.id
-    version = "$Latest"
-  }
+#  launch_template {
+#    id      = aws_launch_template.eks_nodes.id
+#    version = "$Latest"
+#  }
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
