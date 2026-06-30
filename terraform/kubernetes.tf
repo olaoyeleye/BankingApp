@@ -112,18 +112,12 @@ resource "aws_launch_template" "eks_nodes" {
   }
 }
 
-
-
-
-
-
-
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   
-    subnet_ids      = [
+  subnet_ids      = [
     aws_subnet.public-kunle-subnet.id,
     aws_subnet.public-kunle-subnet-2.id
   ]
@@ -133,49 +127,14 @@ resource "aws_eks_node_group" "main" {
     min_size     = 2
   }
 
-  instance_types = ["t3.small"] # EKS nodes usually need more RAM than t2.micro
+  instance_types = ["t3.small"]
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_registry_policy
-#   ,aws_route.private_nat # <--- CRITICAL: Wait for internet access
   ]
 }
-
-
-#resource "aws_eks_node_group" "main" {
-#  cluster_name    = aws_eks_cluster.main.name
-#  node_group_name = "main-nodes"
-#  node_role_arn   = aws_iam_role.eks_nodes.arn
-#  subnet_ids      = [
-#    aws_subnet.public-kunle-subnet.id,
-#    aws_subnet.public-kunle-subnet-2.id
-#  ]
-#  scaling_config {
-#    desired_size = 4
-#    max_size     = 5
-#    min_size     = 2
-#  }
-
-#  instance_types = ["t3.small"]
-  
-#  launch_template {
-#    id      = aws_launch_template.eks_nodes.id
-#    version = "$Latest"
-#  }
-
-#  depends_on = [
-#    aws_iam_role_policy_attachment.eks_worker_node_policy,
-#    aws_iam_role_policy_attachment.eks_cni_policy,
-#    aws_iam_role_policy_attachment.eks_registry_policy,
-#    aws_security_group_rule.allow_cluster_to_nodes,
-#    aws_security_group_rule.allow_nodes_to_cluster
-#  ]
-#  tags = {
-#    Name = "Kubernetes-node"
-#  }
-#}
 
 # Allow EKS Nodes to access PostgreSQL RDS
 resource "aws_security_group_rule" "allow_eks_to_rds" {
@@ -228,7 +187,6 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
   role       = aws_iam_role.ebs_csi_role.name
 }
 
-
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = aws_eks_cluster.main.name
   addon_name               = "aws-ebs-csi-driver"
@@ -240,14 +198,6 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_iam_role_policy_attachment.eks_nodes_ebs_csi
   ]
 }
-
-
-
-
-
-
-
-
 
 # ==============================================================================
 # 4. AWS Load Balancer Controller IAM & Helm Installation
@@ -295,7 +245,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
-  version    = "1.7.2" # Matches the version string of your policy
+  version    = "1.7.2"
 
   set {
     name  = "clusterName"
@@ -317,7 +267,6 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = aws_iam_role.aws_load_balancer_controller.arn
   }
 
-  # CRITICAL: Wait until the EKS worker nodes are online before installing software
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.aws_load_balancer_controller
