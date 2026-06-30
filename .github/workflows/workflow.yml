@@ -112,7 +112,7 @@ jobs:
     #     fi
     - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: |
         echo "Checking if EKS cluster exists..."
         CLUSTER_EXISTS=$(aws eks list-clusters --region ${{ secrets.AWS_REGION }} --query "clusters[?@=='${{ secrets.EKS_CLUSTER_NAME }}']" --output text)
@@ -147,7 +147,7 @@ jobs:
 
 
     - name: Clear Pre-existing Addon Conflicts
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: |
         aws eks delete-addon \
           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
@@ -163,16 +163,16 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform plan -out=tfplan
 
     - name: Terraform Apply
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform apply -auto-approve tfplan   
 
     - name: Clean up Kubernetes Load Balancers before destroy
-      if: steps.set-action.outputs.action != 'destroy'
+      if: steps.set-action.outputs.action == 'destroy'
       run: |
         aws eks update-kubeconfig \
           --name ${{ secrets.EKS_CLUSTER_NAME }} \
@@ -191,12 +191,12 @@ jobs:
 
     - name: Terraform Plan (Destroy)
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action != 'destroy'
+      if: github.event.inputs.terraform_action == 'destroy'
       run: terraform plan -destroy -out=tfplan
 
     - name: Terraform Destroy
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action != 'destroy'
+      if: github.event.inputs.terraform_action == 'destroy'
       run: terraform apply -auto-approve tfplan 
         
     - name: Login to Amazon ECR 
@@ -205,7 +205,7 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: Build, Tag and Push image to ECR (User)
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       id: build-user-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -219,7 +219,7 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
     - name: Build, Tag and Push image to ECR (Transaction)
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       id: build-transaction-service
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
