@@ -4,39 +4,42 @@ metadata:
   name: banking-config
   namespace: banking
 data:
-  KAFKA_BOOTSTRAP_SERVERS: kafka-service:29092
-  REDIS_HOST: redis-service
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-service:29092"
+  REDIS_HOST: "redis-service"
   REDIS_PORT: "6379"
   SERVER_PORT: "8080"
-  FRONTEND_ORIGIN: http://bank-frontend:3000
+
+  FRONTEND_ORIGIN: "http://k8s-banking-bankingi-b1fa44e3bb-1345513901.eu-west-1.elb.amazonaws.com"
+
   KAFKA_NODE_ID: "1"
-  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-  KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-service:29092,PLAINTEXT_HOST://bank-frontend:9092
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+  KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-service:29092,PLAINTEXT_HOST://kafka-service:9092"
   KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
   KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
   KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
   KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
   KAFKA_JMX_PORT: "9101"
-  KAFKA_JMX_HOSTNAME: http://bank-frontend
-  KAFKA_PROCESS_ROLES: broker,controller
-  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-service:29093
-  KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
-  KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-  KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
-  CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
-  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  KAFKA_JMX_HOSTNAME: "kafka-service"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-service:29093"
+  KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
+  CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
 
-  ACTIVITY_SERVICE: http://activity-service:8001
-  BANK_FRONTEND: http://bank-frontend:3000
-  DATABASE_URL: postgres-service:5432
-  REDIS_CACHE: redis-service:6379
-  TRANSACTION_SERVICE: http://transaction-service:8080
-  USER_SERVICE: http://user-service:8000  
-  ACTIVITY_SERVICE_URL:    "http://activity-service.banking.svc.cluster.local:8001"
-  USER_SERVICE_URL:        "http://user-service.banking.svc.cluster.local:8000"
-  TRANSACTION_SERVICE_URL: "http://transaction-service.banking.svc.cluster.local:8080" 
-  KAFKA_BROKER:    "kafka-service.banking.svc.cluster.local:9092"
-  POSTGRES_URL:    "postgresql://postgres-service.banking.svc.cluster.local:5432/banking"
-  REDIS_URL:       "redis://redis-service.banking.svc.cluster.local:6379"  
+  ACTIVITY_SERVICE: "http://activity-service:8001"
+  BANK_FRONTEND: "http://bank-frontend:3000"
+  REDIS_CACHE: "redis-service:6379"
+  TRANSACTION_SERVICE: "http://transaction-service:8080"
+  USER_SERVICE: "http://user-service:8000"
+
+  ACTIVITY_SERVICE_URL: "http://activity-service.banking.svc.cluster.local:8001"
+  USER_SERVICE_URL: "http://user-service.banking.svc.cluster.local:8000"
+  TRANSACTION_SERVICE_URL: "http://transaction-service.banking.svc.cluster.local:8080"
+  KAFKA_BROKER: "kafka-service.banking.svc.cluster.local:9092"
+  POSTGRES_URL: "postgresql://postgres-service.banking.svc.cluster.local:5432/bankingdb"
+  REDIS_URL: "redis://redis-service.banking.svc.cluster.local:6379"
+
   DATABASE_URL: "postgresql://bankuser:bankpass@postgres-service:5432/bankingdb"
