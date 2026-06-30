@@ -83,9 +83,17 @@ resource "aws_eks_cluster" "main" {
   depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
+
+data "aws_ssm_parameter" "eks_ami" {
+  name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.main.version}/amazon-linux-2/recommended/image_id"
+}
+
+
 resource "aws_launch_template" "eks_nodes" {
   name_prefix = "eks-nodes-"
   description = "Launch template for EKS nodes"
+  image_id      = data.aws_ssm_parameter.eks_ami.value  
+  instance_types = ["t3.small"]
   
     metadata_options {
     http_endpoint               = "enabled"
@@ -138,7 +146,7 @@ resource "aws_eks_node_group" "main" {
     version = "$Latest"
   }
 
-  instance_types = ["t3.small"]
+  
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
