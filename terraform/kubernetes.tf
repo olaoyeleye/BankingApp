@@ -54,12 +54,6 @@ resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
   role       = aws_iam_role.eks_nodes.name
 }
 
-# Optional, but I would remove this unless you have a very specific need on the nodes themselves.
-resource "aws_iam_role_policy_attachment" "eks_elb_full_access" {
-  policy_arn = "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess"
-  role       = aws_iam_role.eks_nodes.name
-}
-
 # ==============================================================================
 # 2. EKS Cluster and Node Group
 # ==============================================================================
@@ -161,6 +155,10 @@ resource "aws_eks_node_group" "main" {
     desired_size = 2
     max_size     = 3
     min_size     = 2
+  }
+
+  update_config {
+    max_unavailable = 1
   }
 
   launch_template {
@@ -283,17 +281,16 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
 }
 
 resource "helm_release" "aws_load_balancer_controller" {
-  name             = "aws-load-balancer-controller"
-  repository       = "https://aws.github.io/eks-charts"
-  chart            = "aws-load-balancer-controller"
-  namespace        = "kube-system"
-  version          = "1.7.2"
-  create_namespace = false
-
-  wait          = true
-  timeout       = 900
-  atomic        = false
-  cleanup_on_fail = false
+  name              = "aws-load-balancer-controller"
+  repository        = "https://aws.github.io/eks-charts"
+  chart             = "aws-load-balancer-controller"
+  namespace         = "kube-system"
+  version           = "1.7.2"
+  create_namespace  = false
+  wait              = true
+  timeout           = 900
+  atomic            = false
+  cleanup_on_fail   = false
 
   set {
     name  = "clusterName"
