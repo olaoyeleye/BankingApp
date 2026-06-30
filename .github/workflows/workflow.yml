@@ -35,7 +35,7 @@ jobs:
         echo "Terraform action: $ACTION"
 
 
-
+        
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -68,7 +68,7 @@ jobs:
 
     - name: Import Existing OIDC Provider if it exists 
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: |
         echo "Fetching OIDC Issuer URL from EKS..."
         
@@ -105,7 +105,7 @@ jobs:
         fi
 
     - name: Clear Pre-existing Addon Conflicts
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: |
         aws eks delete-addon \
           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
@@ -121,24 +121,40 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform plan -out=tfplan
 
     - name: Terraform Apply
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action == 'destroy'
+      if: github.event.inputs.terraform_action != 'destroy'
       run: terraform apply -auto-approve tfplan   
+
+    - name: Clean up Kubernetes Load Balancers before destroy
+      if: steps.set-action.outputs.action == 'destroy'
+      run: |
+        aws eks update-kubeconfig \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }}
+
+        echo "Deleting all LoadBalancer services to release AWS ELBs..."
+        kubectl delete svc --all -n banking --field-selector spec.type=LoadBalancer || echo "None found"
+
+        echo "Waiting 60s for ELBs to be released by AWS..."
+        sleep 60
+
+        echo "Ready for Terraform destroy"
+
 
 
 
     - name: Terraform Plan (Destroy)
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action != 'destroy'
+      if: github.event.inputs.terraform_action == 'destroy'
       run: terraform plan -destroy -out=tfplan
 
     - name: Terraform Destroy
       working-directory: ./terraform
-      if: github.event.inputs.terraform_action != 'destroy'
+      if: github.event.inputs.terraform_action == 'destroy'
       run: terraform apply -auto-approve tfplan 
         
     - name: Login to Amazon ECR 
