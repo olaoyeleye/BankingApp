@@ -120,12 +120,12 @@ jobs:
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
       - name: Install kubectl
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         shell: bash
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -133,7 +133,7 @@ jobs:
           sudo mv kubectl /usr/local/bin/
 
       - name: Clean up Kubernetes Load Balancers before destroy
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         shell: bash
         run: |
           aws eks update-kubeconfig \
@@ -149,17 +149,17 @@ jobs:
           echo "Ready for Terraform destroy"
 
       - name: Terraform Plan (Destroy)
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         run: terraform plan -destroy -out=tfplan
 
       - name: Terraform Destroy
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
       - name: Login to Amazon ECR
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
