@@ -104,49 +104,12 @@ resource "aws_eks_access_entry" "node_role" {
   type          = "EC2_LINUX"
 }
 
-#resource "aws_launch_template" "eks_nodes" {
-#  name_prefix   = "eks-nodes-"
-#  description   = "Launch template for EKS nodes"
-#  instance_type = "t3.medium"
-
-#  metadata_options {
-#    http_endpoint               = "enabled"
-#    http_tokens                 = "required"
-#    http_put_response_hop_limit = 2
-#  }
-
-#  block_device_mappings {
-#    device_name = "/dev/xvda"
-#    ebs {
-#      volume_size           = 100
-#      volume_type           = "gp3"
-#      delete_on_termination = true
-#    }
-#  }
-
-#  network_interfaces {
-#    security_groups = [aws_security_group.public-kunle-sg.id]
-#  }
-
-#  tag_specifications {
-#    resource_type = "instance"
-#    tags = {
-#      Name = "EKS-Node"
-#    }
-#  }
-
-#  lifecycle {
-#    create_before_destroy = true
-#  }
-#}
-
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
-  instance_types = ["t3.micro"]
-
+  instance_types  = ["t3.small"]
 
   subnet_ids = [
     aws_subnet.public-kunle-subnet.id,
@@ -154,19 +117,14 @@ resource "aws_eks_node_group" "main" {
   ]
 
   scaling_config {
-    desired_size = 3
-    max_size     = 4
-    min_size     = 3
+    desired_size = 1
+    max_size     = 2
+    min_size     = 1
   }
 
   update_config {
     max_unavailable = 1
   }
-
-#  launch_template {
-#    id      = aws_launch_template.eks_nodes.id
-#    version = "$Latest"
-#  }
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
@@ -225,25 +183,38 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
   role       = aws_iam_role.ebs_csi_role.name
 }
 
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = aws_iam_role.ebs_csi_role.arn
+resource "helm_release" "ebs_csi_driver" {
+  name       = "aws-ebs-csi-driver"
+  repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+  chart      = "aws-ebs-csi-driver"
+  namespace  = "kube-system"
+  version    = "2.30.0"
 
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "PRESERVE"
+  wait            = true
+  timeout         = 900
+  atomic          = false
+  cleanup_on_fail = false
+
+  set {
+    name  = "controller.serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "controller.serviceAccount.name"
+    value = "ebs-csi-controller-sa"
+  }
+
+  set {
+    name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.ebs_csi_role.arn
+  }
 
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
     aws_iam_openid_connect_provider.eks
   ]
-
-  timeouts {
-    create = "40m"
-    update = "40m"
-    delete = "20m"
-  }
 }
 
 # ==============================================================================
@@ -327,6 +298,6 @@ resource "helm_release" "aws_load_balancer_controller" {
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.aws_load_balancer_controller,
-    aws_eks_addon.ebs_csi
+    helm_release.ebs_csi_driver
   ]
 }
