@@ -21,7 +21,21 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    # ── ADD THIS AS THE FIRST STEP ─────────────────────────────────────────
+    - name: Set Terraform Action
+      id: set-action
+      run: |
+        # On push events, input is empty — default to apply
+        # On workflow_dispatch, use whatever was selected
+        ACTION="${{ github.event.inputs.terraform_action }}"
+        if [ -z "$ACTION" ]; then
+          ACTION="apply"
+        fi
+        echo "action=$ACTION" >> $GITHUB_OUTPUT
+        echo "Terraform action: $ACTION"
 
+
+        
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
