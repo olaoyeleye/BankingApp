@@ -86,6 +86,12 @@ resource "aws_eks_cluster" "main" {
 resource "aws_launch_template" "eks_nodes" {
   name_prefix = "eks-nodes-"
   description = "Launch template for EKS nodes"
+  
+    metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2          # ← critical fix - must be 2+ for pods
+  }
 
   block_device_mappings {
     device_name = "/dev/xvda"
@@ -122,9 +128,14 @@ resource "aws_eks_node_group" "main" {
     aws_subnet.public-kunle-subnet-2.id
   ]
   scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 2
+    desired_size = 3
+    max_size     = 4
+    min_size     = 3
+  }
+
+  launch_template {
+    id      = aws_launch_template.eks_nodes.id
+    version = "$Latest"
   }
 
   instance_types = ["t3.small"]
@@ -267,6 +278,15 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = aws_iam_role.aws_load_balancer_controller.arn
   }
 
+  set {
+    name  = "vpcId"
+    value = aws_vpc.vpc.id          # ← add this - explicitly pass VPC ID
+  }
+
+  set {
+    name  = "region"
+    value = var.region              # ← also pass region explicitly
+  }
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.aws_load_balancer_controller
