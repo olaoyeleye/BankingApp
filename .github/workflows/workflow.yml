@@ -150,28 +150,28 @@ jobs:
           curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
       - name: Terraform Plan
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         shell: bash
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         shell: bash
         run: terraform apply -auto-approve tfplan
 
       - name: Terraform Plan Destroy
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
         run: terraform plan -destroy -out=tfplan
 
       - name: Terraform Destroy
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
-        run: terraform apply -auto-approve tfplan
+        run: terraform destroy -auto-approve 
 
       - name: Install kubectl
         if: steps.set-action.outputs.action != 'destroy'
