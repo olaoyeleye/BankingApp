@@ -43,3 +43,12 @@ data:
   POSTGRES_URL: "postgresql://postgres-service.banking.svc.cluster.local:5432/bankingdb"
   REDIS_URL: "redis://redis-service.banking.svc.cluster.local:6379"
   REDIS_CACHE: "redis-service:6379"
+
+
+  POSTGRES_DB: bankingdb
+  POSTGRES_USER: bankuser
+  POSTGRES_PASSWORD: bankpass
+  DATABASE_URL: postgresql://bankuser:bankpass@postgres-service:5432/bankingdb
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-service:5432/bankingdb
+  SPRING_DATASOURCE_USERNAME: bankuser
+  SPRING_DATASOURCE_PASSWORD: bankpass

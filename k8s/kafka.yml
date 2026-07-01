@@ -25,26 +25,26 @@ spec:
             - configMapRef:
                 name: banking-config
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka-service
-  namespace: banking
-spec:
-  selector:
-    app: kafka
-  ports:
-    - name: plaintext
-      port: 29092
-      targetPort: 29092
-    - name: external
-      port: 9092
-      targetPort: 9092
-    - name: jmx
-      port: 9101
-      targetPort: 9101
-    - name: controller
-      port: 29093
-      targetPort: 29093
-  type: ClusterIP
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: kafka-service
+#   namespace: banking
+# spec:
+#   selector:
+#     app: kafka
+#   ports:
+#     - name: plaintext
+#       port: 29092
+#       targetPort: 29092
+#     - name: external
+#       port: 9092
+#       targetPort: 9092
+#     - name: jmx
+#       port: 9101
+#       targetPort: 9101
+#     - name: controller
+#       port: 29093
+#       targetPort: 29093
+#   type: ClusterIP

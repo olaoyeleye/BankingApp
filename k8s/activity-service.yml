@@ -35,16 +35,16 @@ spec:
                   name: banking-config
                   key: FRONTEND_ORIGIN
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: activity-service
-  namespace: banking
-spec:
-  selector:
-    app: activity-service
-  ports:
-    - port: 8001
-      targetPort: 8001
-  type: LoadBalancer
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: activity-service
+#   namespace: banking
+# spec:
+#   selector:
+#     app: activity-service
+#   ports:
+#     - port: 8001
+#       targetPort: 8001
+#   type: LoadBalancer

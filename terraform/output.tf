@@ -1,25 +1,9 @@
-#output "deployer_private_key_pem" {
-#  description = "Private key (PEM) for SSH access to instances - keep this secure"
-#  value       = tls_private_key.deployer.private_key_pem
-#  sensitive   = true
-#}
-
-
-
-
-
-
-# Outputs
-output "nginx_public_ip" {
-  value       = aws_instance.nginx.public_ip
-  description = "Public IP of Nginx server"
+output "eks_cluster_name" {
+  value       = aws_eks_cluster.main.name
+  description = "EKS cluster name"
 }
 
-
-
-#output "private_key_pem" {
-#  value       = tls_private_key.deployer.private_key_pem
-#  description = "Private SSH key for instance access"
-#  sensitive   = true
-#}
-
+output "eks_cluster_endpoint" {
+  value       = aws_eks_cluster.main.endpoint
+  description = "EKS cluster endpoint"
+}
