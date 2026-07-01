@@ -140,7 +140,7 @@ jobs:
       - name: Terraform Init
         working-directory: ./terraform
         shell: bash
-        run: terraform init
+        run: terraform init -reconfigure
 
       - name: Download AWS Load Balancer Controller IAM Policy
         if: steps.set-action.outputs.action != 'destroy'
