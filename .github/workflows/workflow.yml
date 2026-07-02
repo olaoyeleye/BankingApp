@@ -67,9 +67,7 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          aws sts get-caller-identity
-          echo("================================")
+        run: | 
           terraform init  
           terraform plan          # see what changes Terraform will make
           terraform apply         # apply changes and update state
