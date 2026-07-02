@@ -160,7 +160,7 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
       - name: Login to Amazon ECR
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
