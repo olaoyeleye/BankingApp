@@ -72,6 +72,7 @@ jobs:
           terraform state rm aws_security_group.public_kunle_sg
           terraform state rm aws_iam_openid_connect_provider.eks
 
+
       - name: Download AWS Load Balancer Controller IAM Policy
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
