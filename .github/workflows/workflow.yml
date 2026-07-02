@@ -69,8 +69,7 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: | 
-          terraform init  
-          terraform state rm aws_subnet.private-kunle-subnet
+          terraform init   
           terraform apply \
           -target=aws_eks_cluster.main \
           -target=aws_eks_access_entry.ci_admin \
