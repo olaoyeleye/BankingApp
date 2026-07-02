@@ -110,6 +110,16 @@ resource "aws_eks_access_entry" "node_role" {
 }
 
 resource "aws_eks_node_group" "main" {
+  
+  removed {
+    from = aws_eks_node_group.main
+
+    lifecycle {
+      destroy = false
+    }
+  }
+
+
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
