@@ -59,7 +59,7 @@ resource "kubernetes_ingress_v1" "bank_frontend" {
     ingress_class_name = "nginx"
 
     rule {
-      host = "bank.yourdomain.com"
+      #host = "bank.yourdomain.com"
 
       http {
         path {
