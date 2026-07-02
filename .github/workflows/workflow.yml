@@ -70,19 +70,8 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: | 
           terraform init   
-          aws eks describe-nodegroup \
-          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-          --nodegroup-name main-nodes \
-          --region eu-west-1
-          terraform plan  -out=tfplan  
-          terraform plan  -out=tfplan 
-
-          terraform apply \
-          -target=aws_eks_cluster.main \
-          -target=aws_eks_access_entry.ci_admin \
-          -target=aws_eks_access_policy_association.ci_admin_policy \
-          -target=aws_eks_node_group.main \
-          -target=aws_iam_openid_connect_provider.eks apply -auto-approve tfplan 
+          terraform state rm aws_eks_node_group.main
+ 
 
 
 
@@ -91,7 +80,6 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: | 
-          terraform state rm aws_subnet.private-kunle-subnet
           terraform init  
           terraform plan  -out=tfplan       # see what changes Terraform will make
           terraform apply -auto-approve tfplan        # apply changes and update state
