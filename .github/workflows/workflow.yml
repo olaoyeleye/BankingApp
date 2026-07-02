@@ -67,6 +67,8 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform init
+          terraform state rm aws_iam_role_policy_attachment.aws_load_balancer_controller
+          terraform state rm aws_iam_policy.aws_load_balancer_controller
           terraform destroy --auto-approve
 
       - name: Download AWS Load Balancer Controller IAM Policy
