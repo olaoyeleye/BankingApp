@@ -2,7 +2,12 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_caller_identity" "current" {}
+# ==============================================================================
+# Variables expected
+# ==============================================================================
+# variable "vpc_name" {}
+# variable "region" {}
+# variable "eks_admin_principal_arn" {}
 
 # ==============================================================================
 # 1. Base IAM Roles
@@ -82,17 +87,14 @@ resource "aws_eks_cluster" "main" {
 
 resource "aws_eks_access_entry" "ci_admin" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = data.aws_caller_identity.current.arn
+  principal_arn = var.eks_admin_principal_arn
   type          = "STANDARD"
 }
+
 resource "aws_eks_access_policy_association" "ci_admin_policy" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = data.aws_caller_identity.current.arn
+  principal_arn = var.eks_admin_principal_arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  access_scope {
-    type = "cluster"
-  }
-}
 
   access_scope {
     type = "cluster"
@@ -147,7 +149,7 @@ resource "aws_security_group_rule" "allow_eks_to_rds" {
 }
 
 # ==============================================================================
-# 3. OIDC + EBS CSI Driver IAM Role
+# 3. OIDC Provider
 # ==============================================================================
 
 data "tls_certificate" "eks" {
@@ -159,6 +161,10 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
+
+# ==============================================================================
+# 4. EBS CSI Driver IAM + Helm
+# ==============================================================================
 
 resource "aws_iam_role" "ebs_csi_role" {
   name = "${var.vpc_name}-ebs-csi-driver-role"
@@ -221,11 +227,12 @@ resource "helm_release" "ebs_csi_driver" {
 }
 
 # ==============================================================================
-# 4. AWS Load Balancer Controller IAM + Helm
+# 5. AWS Load Balancer Controller IAM + Helm
 # ==============================================================================
 
 resource "aws_iam_role" "aws_load_balancer_controller" {
   name = "${var.vpc_name}-aws-load-balancer-controller-role"
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -247,16 +254,7 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
 resource "aws_iam_policy" "aws_load_balancer_controller" {
   name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
   description = "IAM Policy for AWS Load Balancer Controller"
-  policy      = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["ec2:DescribeAccountAttributes"]
-        Resource = "*"
-      }
-    ]
-  })
+  policy      = file("${path.module}/iam_policy.json")
 }
 
 resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
@@ -265,16 +263,16 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
 }
 
 resource "helm_release" "aws_load_balancer_controller" {
-  name              = "aws-load-balancer-controller"
-  repository        = "https://aws.github.io/eks-charts"
-  chart             = "aws-load-balancer-controller"
-  namespace         = "kube-system"
-  version           = "1.7.2"
-  create_namespace  = false
-  wait              = true
-  timeout           = 900
-  atomic            = false
-  cleanup_on_fail   = false
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  namespace        = "kube-system"
+  version          = "1.7.2"
+  create_namespace = false
+  wait             = true
+  timeout          = 900
+  atomic           = false
+  cleanup_on_fail  = false
 
   set {
     name  = "clusterName"
@@ -309,9 +307,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.aws_load_balancer_controller,
-    helm_release.ebs_csi_driver
+    helm_release.ebs_csi_driver,
+    aws_eks_access_policy_association.ci_admin_policy
   ]
 }
-
-
-
