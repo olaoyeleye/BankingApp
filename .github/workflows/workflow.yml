@@ -75,7 +75,7 @@ jobs:
           -target=aws_eks_access_entry.ci_admin \
           -target=aws_eks_access_policy_association.ci_admin_policy \
           -target=aws_eks_node_group.main \
-          -target=aws_iam_openid_connect_provider.eks
+          -target=aws_iam_openid_connect_provider.eks -auto-approve 
 
 
 
