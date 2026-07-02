@@ -183,39 +183,39 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
   role       = aws_iam_role.ebs_csi_role.name
 }
 
-resource "helm_release" "ebs_csi_driver" {
-  name       = "aws-ebs-csi-driver"
-  repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
-  chart      = "aws-ebs-csi-driver"
-  namespace  = "kube-system"
-  version    = "2.30.0"
+#resource "helm_release" "ebs_csi_driver" {
+#  name       = "aws-ebs-csi-driver"
+#  repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+#  chart      = "aws-ebs-csi-driver"
+#  namespace  = "kube-system"
+#  version    = "2.30.0"
 
-  wait            = true
-  timeout         = 900
-  atomic          = false
-  cleanup_on_fail = false
+#  wait            = true
+#  timeout         = 900
+#  atomic          = false
+#  cleanup_on_fail = false
 
-  set {
-    name  = "controller.serviceAccount.create"
-    value = "true"
-  }
+#  set {
+#    name  = "controller.serviceAccount.create"
+#    value = "true"
+#  }
 
-  set {
-    name  = "controller.serviceAccount.name"
-    value = "ebs-csi-controller-sa"
-  }
+#  set {
+#    name  = "controller.serviceAccount.name"
+#    value = "ebs-csi-controller-sa"
+#  }
 
-  set {
-    name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.ebs_csi_role.arn
-  }
+#  set {
+#    name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+#    value = aws_iam_role.ebs_csi_role.arn
+#  }
 
-  depends_on = [
-    aws_eks_node_group.main,
-    aws_iam_role_policy_attachment.ebs_csi_policy,
-    aws_iam_openid_connect_provider.eks
-  ]
-}
+#  depends_on = [
+#    aws_eks_node_group.main,
+#    aws_iam_role_policy_attachment.ebs_csi_policy,
+#    aws_iam_openid_connect_provider.eks
+#  ]
+#}
 
 # ==============================================================================
 # 4. AWS Load Balancer Controller IAM + Helm
