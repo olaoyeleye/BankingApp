@@ -67,6 +67,7 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform init 
+          terraform destroy --auto-approve
           #terraform import kubernetes_service_v1.bank_frontend banking/bank-frontend
 
       - name: Download AWS Load Balancer Controller IAM Policy
