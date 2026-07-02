@@ -71,7 +71,7 @@ jobs:
         run: | 
           terraform init   
           aws eks describe-nodegroup \
-          --cluster-name <cluster-name> \
+          --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
           --nodegroup-name main-nodes \
           --region eu-west-1
 
