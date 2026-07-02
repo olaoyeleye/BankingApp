@@ -230,7 +230,7 @@ resource "helm_release" "ebs_csi_driver" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+  #  aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
     aws_iam_openid_connect_provider.eks
   ]
@@ -575,7 +575,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+  #  aws_eks_node_group.main,
     aws_iam_role_policy_attachment.aws_load_balancer_controller,
     helm_release.ebs_csi_driver,
     aws_eks_access_policy_association.ci_admin_policy
