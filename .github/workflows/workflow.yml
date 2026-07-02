@@ -65,7 +65,12 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init
+        run: |
+          terraform init
+          terraform state rm aws_vpc.vpc
+          terraform state rm aws_eks_cluster.main
+          terraform state rm aws_security_group.public_kunle_sg
+          terraform state rm aws_iam_openid_connect_provider.eks
 
       - name: Download AWS Load Balancer Controller IAM Policy
         if: steps.set-action.outputs.action != 'destroy'
