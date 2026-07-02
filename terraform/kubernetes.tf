@@ -221,83 +221,83 @@ resource "helm_release" "ebs_csi_driver" {
 # 4. AWS Load Balancer Controller IAM + Helm
 # ==============================================================================
 
-resource "aws_iam_role" "aws_load_balancer_controller" {
-  name = "${var.vpc_name}-aws-load-balancer-controller-role"
+#resource "aws_iam_role" "aws_load_balancer_controller" {
+#  name = "${var.vpc_name}-aws-load-balancer-controller-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
-      }
-      Action = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-        }
-      }
-    }]
-  })
-}
+#  assume_role_policy = jsonencode({
+#    Version = "2012-10-17"
+#    Statement = [{
+#      Effect = "Allow"
+#      Principal = {
+#        Federated = aws_iam_openid_connect_provider.eks.arn
+#      }
+#      Action = "sts:AssumeRoleWithWebIdentity"
+#      Condition = {
+#        StringEquals = {
+#          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+#          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+#        }
+#      }
+#    }]
+#  })
+#}
 
-resource "aws_iam_policy" "aws_load_balancer_controller" {
-  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
-  description = "IAM Policy for AWS Load Balancer Controller"
-  policy      = file("${path.module}/iam_policy.json")
-}
+#resource "aws_iam_policy" "aws_load_balancer_controller" {
+#  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
+#  description = "IAM Policy for AWS Load Balancer Controller"
+#  policy      = file("${path.module}/iam_policy.json")
+#}
 
-resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
-  policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
-  role       = aws_iam_role.aws_load_balancer_controller.name
-}
+#resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+#  policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
+#  role       = aws_iam_role.aws_load_balancer_controller.name
+#}
 
-resource "helm_release" "aws_load_balancer_controller" {
-  name              = "aws-load-balancer-controller"
-  repository        = "https://aws.github.io/eks-charts"
-  chart             = "aws-load-balancer-controller"
-  namespace         = "kube-system"
-  version           = "1.7.2"
-  create_namespace  = false
-  wait              = true
-  timeout           = 900
-  atomic            = false
-  cleanup_on_fail   = false
+#resource "helm_release" "aws_load_balancer_controller" {
+#  name              = "aws-load-balancer-controller"
+#  repository        = "https://aws.github.io/eks-charts"
+#  chart             = "aws-load-balancer-controller"
+#  namespace         = "kube-system"
+#  version           = "1.7.2"
+#  create_namespace  = false
+#  wait              = true
+#  timeout           = 900
+#  atomic            = false
+#  cleanup_on_fail   = false
 
-  set {
-    name  = "clusterName"
-    value = aws_eks_cluster.main.name
-  }
+#  set {
+#    name  = "clusterName"
+#    value = aws_eks_cluster.main.name
+#  }
 
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
+#  set {
+#    name  = "serviceAccount.create"
+#    value = "true"
+#  }
 
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
+#  set {
+#    name  = "serviceAccount.name"
+#    value = "aws-load-balancer-controller"
+#  }
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.aws_load_balancer_controller.arn
-  }
+#  set {
+#    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+#    value = aws_iam_role.aws_load_balancer_controller.arn
+#  }
 
-  set {
-    name  = "region"
-    value = var.region
-  }
+#  set {
+#    name  = "region"
+#    value = var.region
+#  }
 
-  set {
-    name  = "vpcId"
-    value = aws_vpc.vpc.id
-  }
+#  set {
+#    name  = "vpcId"
+#    value = aws_vpc.vpc.id
+#  }
 
-  depends_on = [
-    aws_eks_node_group.main,
-    aws_iam_role_policy_attachment.aws_load_balancer_controller,
-    helm_release.ebs_csi_driver
-  ]
-}
+#  depends_on = [
+#    aws_eks_node_group.main,
+#    aws_iam_role_policy_attachment.aws_load_balancer_controller,
+#    helm_release.ebs_csi_driver
+#  ]
+#}
