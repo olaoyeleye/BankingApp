@@ -65,6 +65,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
           terraform init 
           terraform init          # if not already initialized
