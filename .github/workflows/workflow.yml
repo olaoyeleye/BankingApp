@@ -68,8 +68,9 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
-          terraform init 
-          terraform init          # if not already initialized
+          aws sts get-caller-identity
+          echo("================================")
+          terraform init  
           terraform plan          # see what changes Terraform will make
           terraform apply         # apply changes and update state
           terraform state rm aws_subnet.private-kunle-subnet
