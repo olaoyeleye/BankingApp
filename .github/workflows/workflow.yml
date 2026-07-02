@@ -67,6 +67,10 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform init 
+          terraform init          # if not already initialized
+          terraform plan          # see what changes Terraform will make
+          terraform apply         # apply changes and update state
+          terraform state rm aws_subnet.private-kunle-subnet
           terraform destroy --auto-approve
           #terraform import kubernetes_service_v1.bank_frontend banking/bank-frontend
 
