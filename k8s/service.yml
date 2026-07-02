@@ -1,4 +1,4 @@
----
+# ---
 # apiVersion: v1
 # kind: Service
 # metadata:
@@ -14,7 +14,7 @@
 #       targetPort: 8000
 
 
----
+# ---
 # apiVersion: v1
 # kind: Service
 # metadata:
@@ -28,20 +28,20 @@
 #     - protocol: TCP
 #       port: 3000
 #       targetPort: 3000
-apiVersion: v1
-kind: Service
-metadata:
-  name: bank-frontend
-  namespace: banking
-spec:
-  type: ClusterIP
-  selector:
-    app: bank-frontend
-  ports:
-    - name: http
-      port: 80        # Service port seen inside cluster
-      targetPort: 3000  # Container port your app listens on
-      protocol: TCP
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: bank-frontend
+#   namespace: banking
+# spec:
+#   type: ClusterIP
+#   selector:
+#     app: bank-frontend
+#   ports:
+#     - name: http
+#       port: 80        # Service port seen inside cluster
+#       targetPort: 3000  # Container port your app listens on
+#       protocol: TCP
 ---
 apiVersion: v1
 kind: Service
