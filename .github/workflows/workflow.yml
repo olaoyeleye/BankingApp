@@ -66,10 +66,7 @@ jobs:
       - name: Terraform Init
         working-directory: ./terraform
         run: |
-          terraform init
-          terraform state rm helm_release.ebs_csi_driver
-          terraform state rm helm_release.aws_load_balancer_controller
-          terraform destroy --auto-approve
+          terraform init 
 
       - name: Download AWS Load Balancer Controller IAM Policy
         if: steps.set-action.outputs.action != 'destroy'
@@ -124,7 +121,7 @@ jobs:
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
@@ -137,7 +134,7 @@ jobs:
           sudo mv kubectl /usr/local/bin/
 
       - name: Clean up Kubernetes Load Balancers before destroy
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         shell: bash
         run: |
           aws eks update-kubeconfig \
@@ -153,12 +150,12 @@ jobs:
           echo "Ready for Terraform destroy"
 
       - name: Terraform Plan (Destroy)
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         run: terraform plan -destroy -out=tfplan
 
       - name: Terraform Destroy
-        if: steps.set-action.outputs.action != 'destroy'
+        if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
