@@ -375,11 +375,12 @@ jobs:
         working-directory: ./techbleat-global-bank-frontend
         shell: bash
         run: |
-          sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
-          sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
-          sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
-        #sed -i 's|const API_BASE = "http://[^"]*";|const API_BASE = "https://${{ steps.get-lb-urls.outputs.ingress_host }}";|' src/App.jsx
+          INGRESS_HOST=$(kubectl -n banking get ingress banking-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "ingress_host=$INGRESS_HOST" >> "$GITHUB_OUTPUT"
 
+          sed -i 's|const USER_API = "[^"]*";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
+          sed -i 's|const TX_API = "[^"]*";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
+          sed -i 's|const ACTIVITY_API = "[^"]*";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
 
       - name: Build, Tag and Push frontend image to ECR
         if: steps.set-action.outputs.action != 'destroy'
