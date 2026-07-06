@@ -85,7 +85,7 @@ resource "aws_eks_cluster" "main" {
       aws_subnet.public-kunle-subnet.id,
       aws_subnet.public-kunle-subnet-2.id
     ]
-    endpoint_private_access = false  #true
+    endpoint_private_access = true
     endpoint_public_access  = true
   }
 
