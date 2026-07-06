@@ -421,18 +421,15 @@ jobs:
           echo "Ingress ALB URL: $INGRESS_ALB"
 
       - name: Copy manifest repo to EC2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        if: steps.set-action.outputs.action != 'destroy'
         shell: bash
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key 
           rsync -avz \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='.github' \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='terraform/.terraform' \
+            --exclude='terraform/tfplan' \
+            -e "ssh -i /home/runner/.ssh/ansible_key.pem -o StrictHostKeyChecking=no" \
             ${{ github.workspace }}/ \
-            ec2-user@${{ secrets.EC2_HOST }}:/home/ec2-user/manifest-repo/
+            ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }}:/home/ec2-user/manifest-repo/
