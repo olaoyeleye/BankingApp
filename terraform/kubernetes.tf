@@ -230,7 +230,7 @@ resource "helm_release" "ebs_csi_driver" {
   }
 
   depends_on = [
-  #  aws_eks_node_group.main,
+    aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
     aws_iam_openid_connect_provider.eks
   ]
@@ -261,11 +261,11 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
   })
 }
 
-#resource "aws_iam_policy" "aws_load_balancer_controller" {
-#  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
-#  description = "IAM Policy for AWS Load Balancer Controller"
-#  policy      = file("${path.module}/iam_policy.json")
-#}
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
+  description = "IAM Policy for AWS Load Balancer Controller"
+  policy      = file("${path.module}/iam_policy.json")
+  }
 
 
 resource "aws_iam_policy" "aws_load_balancer_controller" {
@@ -532,52 +532,52 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   role       = aws_iam_role.aws_load_balancer_controller.name
 }
 
-#resource "helm_release" "aws_load_balancer_controller" {
-#  name             = "aws-load-balancer-controller"
-#  repository       = "https://aws.github.io/eks-charts"
-#  chart            = "aws-load-balancer-controller"
-#  namespace        = "kube-system"
-#  version          = "1.7.2"
-#  create_namespace = false
-#  wait             = true
-#  timeout          = 900
-#  atomic           = false
-#  cleanup_on_fail  = false
+resource "helm_release" "aws_load_balancer_controller" {
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  namespace        = "kube-system"
+  version          = "1.7.2"
+  create_namespace = false
+  wait             = true
+  timeout          = 900
+  atomic           = false
+  cleanup_on_fail  = false
 
-#  set {
-#    name  = "clusterName"
-#    value = aws_eks_cluster.main.name
-#  }
+  set {
+    name  = "clusterName"
+    value = aws_eks_cluster.main.name
+  }
 
-#  set {
-#    name  = "serviceAccount.create"
-#    value = "true"
-#  }
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
 
-#  set {
-#    name  = "serviceAccount.name"
-#    value = "aws-load-balancer-controller"
-#  }
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
 
-#  set {
-#    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-#    value = aws_iam_role.aws_load_balancer_controller.arn
-#  }
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.aws_load_balancer_controller.arn
+  }
 
-#  set {
-#    name  = "region"
-#    value = var.region
-#  }
+  set {
+    name  = "region"
+    value = var.region
+  }
 
-#  set {
-#    name  = "vpcId"
-#    value = aws_vpc.vpc.id
-#  }
+  set {
+    name  = "vpcId"
+    value = aws_vpc.vpc.id
+  }
 
-#  depends_on = [
-#    aws_eks_node_group.main,
-#    aws_iam_role_policy_attachment.aws_load_balancer_controller,
-#    helm_release.ebs_csi_driver,
-#    aws_eks_access_policy_association.ci_admin_policy
-#  ]
-#}
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.aws_load_balancer_controller,
+    helm_release.ebs_csi_driver,
+    aws_eks_access_policy_association.ci_admin_policy
+  ]
+}
