@@ -375,9 +375,9 @@ jobs:
         working-directory: ./techbleat-global-bank-frontend
         shell: bash
         run: |
-          sed -i 's|const USER_API = "http://[^"]*:";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
-          sed -i 's|const TX_API = "http://[^"]*:";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
-          sed -i 's|const ACTIVITY_API = "http://[^"]*:";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
+          sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
+          sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
+          sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
         #sed -i 's|const API_BASE = "http://[^"]*";|const API_BASE = "https://${{ steps.get-lb-urls.outputs.ingress_host }}";|' src/App.jsx
 
 
