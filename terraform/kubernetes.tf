@@ -1,10 +1,10 @@
-removed {
-  from = aws_eks_node_group.main
+#removed {
+#  from = aws_eks_node_group.main
 
-  lifecycle {
-    destroy = false
-  }
-}
+#  lifecycle {
+#    destroy = false
+#  }
+#}
 
 
 data "aws_availability_zones" "available" {
