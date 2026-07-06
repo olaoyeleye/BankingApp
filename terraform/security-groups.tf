@@ -16,6 +16,15 @@ resource "aws_vpc_security_group_ingress_rule" "allow_HTTPS" {
   to_port           = 443
 }
 
+resource "aws_security_group_rule" "allow_ec2_to_eks_api" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  source_security_group_id = aws_security_group.public-kunle-sg.id  # your EC2's SG
+  description              = "Allow EC2/Ansible to reach EKS API"
+}
 
 resource "aws_vpc_security_group_ingress_rule" "allow_user" {
   security_group_id = aws_security_group.public-kunle-sg.id
