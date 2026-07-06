@@ -83,9 +83,9 @@ jobs:
           terraform init   
           #terraform state rm aws_eks_node_group.main
           #terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_' || true
-          terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_|data.aws_eks_' || true
-              terraform state rm helm_release.ingress_nginx || true
-              terraform state rm kubernetes_ingress_v1.bank_frontend || true
+         # terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_|data.aws_eks_' || true
+              #terraform state rm helm_release.ingress_nginx || true
+          #    terraform state rm kubernetes_ingress_v1.bank_frontend || true
           #terraform state rm \
             #aws_eks_cluster.main \
             #aws_eks_access_entry.ci_admin \
