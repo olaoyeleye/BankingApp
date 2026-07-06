@@ -394,10 +394,11 @@ jobs:
             exit 1
           fi
 
-          sed -i "s|const USER_API = \"[^\"]*\";|const USER_API = \"http://${INGRESS_HOST}/users\";|" src/App.jsx
-          sed -i "s|const TX_API = \"[^\"]*\";|const TX_API = \"http://${INGRESS_HOST}/transactions\";|" src/App.jsx
-          sed -i "s|const ACTIVITY_API = \"[^\"]*\";|const ACTIVITY_API = \"http://${INGRESS_HOST}/activities\";|" src/App.jsx
+          # sed -i "s|const USER_API = \"[^\"]*\";|const USER_API = \"http://${INGRESS_HOST}\";|" src/App.jsx
+          # sed -i "s|const TX_API = \"[^\"]*\";|const TX_API = \"http://${INGRESS_HOST}/transactions\";|" src/App.jsx
+          # sed -i "s|const ACTIVITY_API = \"[^\"]*\";|const ACTIVITY_API = \"http://${INGRESS_HOST}/activities\";|" src/App.jsx
 
+          sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx
           cat src/App.jsx | head -n 10
           
 

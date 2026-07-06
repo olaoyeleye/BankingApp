@@ -27,7 +27,7 @@ spec:
                 port:
                   number: 8080
 
-          - path: /activity
+          - path: /activities
             pathType: Prefix
             backend:
               service:

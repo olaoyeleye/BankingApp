@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
-const USER_API = "http://USER_APIx:8000";
-const TX_API = "http://TX_APIx:8080";
-const ACTIVITY_API = "http://ACTIVITY_APIx:8001";
+// const USER_API = "http://USER_APIx:8000";
+// const TX_API = "http://TX_APIx:8080";
+// const ACTIVITY_API = "http://ACTIVITY_APIx:8001";
+
+
+const USER_API = "http://INGRESS_HOST";
+const TX_API = "http://INGRESS_HOST";
+const ACTIVITY_API = "http://INGRESS_HOST";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
