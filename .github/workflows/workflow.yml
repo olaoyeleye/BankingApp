@@ -124,17 +124,6 @@ jobs:
           terraform state rm data.aws_eks_cluster_auth.main || true
 
           terraform state list || true
-          
-          terraform apply -target=aws_eks_cluster.main \
-            -target=aws_iam_openid_connect_provider.eks \
-            -target=aws_iam_role.aws_load_balancer_controller \
-            -target=aws_iam_role.ebs_csi_role \
-            -target=aws_eks_access_entry.ci_admin \
-            -target=aws_eks_access_entry.node_role \
-            -target=aws_eks_access_policy_association.ci_admin_policy \
-            --auto-approve
- 
-          terraform destroy --auto-approve
-          #terraform import kubernetes_service_v1.bank_frontend banking/bank-frontend
+          terraform import kubernetes_service_v1.bank_frontend banking/bank-frontend || true
 
 
