@@ -112,15 +112,9 @@ jobs:
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
-           
-      - name: Terraform Plan 
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform plan -out=tfplan
-                
-                
-      - name: Terraform Plan
+
+
+      - name: Terraform Apply Specifics
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         env:
@@ -145,7 +139,13 @@ jobs:
             -target=aws_eks_node_group.main \
             -target=aws_iam_openid_connect_provider.eks \
             -auto-approve
- 
+          
+      - name: Terraform Plan 
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
