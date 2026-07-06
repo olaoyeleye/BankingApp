@@ -115,10 +115,15 @@
 # ---- STEP 1: Fix StorageClass FIRST ----
 - name: Fix StorageClass
   shell: |
+    set -euxo pipefail
+    kubectl get nodes
+    kubectl get storageclass
     kubectl delete storageclass gp2 --ignore-not-found=true
     sleep 5
     kubectl apply -f /home/ec2-user/k8s/storageclass.yml
     kubectl get storageclass
+
+
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user

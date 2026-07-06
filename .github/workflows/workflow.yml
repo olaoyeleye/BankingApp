@@ -132,31 +132,6 @@ jobs:
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
 
-      - name: Clean up Kubernetes Load Balancers before destroy
-        if: steps.set-action.outputs.action == 'destroy'
-        shell: bash
-        run: |
-          aws eks update-kubeconfig \
-            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
-            --region "${{ secrets.AWS_REGION }}"
-
-          echo "Deleting all LoadBalancer services to release AWS ELBs..."
-          kubectl delete svc --all -n banking --field-selector spec.type=LoadBalancer || echo "None found"
-
-          echo "Waiting 60s for ELBs to be released by AWS..."
-          sleep 60
-
-          echo "Ready for Terraform destroy"
-
-      - name: Terraform Plan (Destroy)
-        if: steps.set-action.outputs.action == 'destroy'
-        working-directory: ./terraform
-        run: terraform plan -destroy -out=tfplan
-
-      - name: Terraform Destroy
-        if: steps.set-action.outputs.action == 'destroy'
-        working-directory: ./terraform
-        run: terraform apply -auto-approve tfplan
 
       - name: Login to Amazon ECR
         if: steps.set-action.outputs.action != 'destroy'
