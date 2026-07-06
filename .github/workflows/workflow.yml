@@ -375,12 +375,31 @@ jobs:
         working-directory: ./techbleat-global-bank-frontend
         shell: bash
         run: |
-          INGRESS_HOST=$(kubectl -n banking get ingress banking-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          echo "ingress_host=$INGRESS_HOST" >> "$GITHUB_OUTPUT"
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
 
-          sed -i 's|const USER_API = "[^"]*";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
-          sed -i 's|const TX_API = "[^"]*";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
-          sed -i 's|const ACTIVITY_API = "[^"]*";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
+          for i in {1..20}; do
+            INGRESS_HOST=$(kubectl -n banking get ingress banking-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -n "$INGRESS_HOST" ]; then
+              break
+            fi
+            echo "Attempt $i: ingress host not ready, waiting 15s..."
+            sleep 15
+          done
+
+          if [ -z "$INGRESS_HOST" ]; then
+            echo "Ingress host is empty"
+            kubectl -n banking get ingress
+            exit 1
+          fi
+
+          sed -i "s|const USER_API = \"[^\"]*\";|const USER_API = \"http://${INGRESS_HOST}/users\";|" src/App.jsx
+          sed -i "s|const TX_API = \"[^\"]*\";|const TX_API = \"http://${INGRESS_HOST}/transactions\";|" src/App.jsx
+          sed -i "s|const ACTIVITY_API = \"[^\"]*\";|const ACTIVITY_API = \"http://${INGRESS_HOST}/activities\";|" src/App.jsx
+
+          cat src/App.jsx | head -n 10
+          
 
       - name: Build, Tag and Push frontend image to ECR
         if: steps.set-action.outputs.action != 'destroy'
