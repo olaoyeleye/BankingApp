@@ -118,36 +118,36 @@ resource "aws_eks_access_entry" "node_role" {
   type          = "EC2_LINUX"
 }
 
-#resource "aws_eks_node_group" "main" {
+resource "aws_eks_node_group" "main" {
 
-#  cluster_name    = aws_eks_cluster.main.name
-#  node_group_name = "main-nodes"
-#  node_role_arn   = aws_iam_role.eks_nodes.arn
-#  ami_type        = "AL2023_x86_64_STANDARD"
-#  instance_types  = ["t3.small"]
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "main-nodes"
+  node_role_arn   = aws_iam_role.eks_nodes.arn
+  ami_type        = "AL2023_x86_64_STANDARD"
+  instance_types  = ["t3.small"]
 
-#  subnet_ids = [
-#    aws_subnet.public-kunle-subnet.id,
-#    aws_subnet.public-kunle-subnet-2.id
-#  ]
+  subnet_ids = [
+    aws_subnet.public-kunle-subnet.id,
+    aws_subnet.public-kunle-subnet-2.id
+  ]
 
-#  scaling_config {
-#    desired_size = 2
-#    max_size     = 2
-#    min_size     = 2
-#  }
+  scaling_config {
+    desired_size = 2
+    max_size     = 2
+    min_size     = 2
+  }
 
-#  update_config {
-#    max_unavailable = 1
-#  }
+  update_config {
+    max_unavailable = 1
+  }
 
-#  depends_on = [
-#    aws_iam_role_policy_attachment.eks_worker_node_policy,
-#    aws_iam_role_policy_attachment.eks_cni_policy,
-#    aws_iam_role_policy_attachment.eks_registry_policy,
-#    aws_eks_access_entry.node_role
-#  ]
-#}
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_node_policy,
+    aws_iam_role_policy_attachment.eks_cni_policy,
+    aws_iam_role_policy_attachment.eks_registry_policy,
+    aws_eks_access_entry.node_role
+  ]
+}
 
 resource "aws_security_group_rule" "allow_eks_to_rds" {
   type                     = "ingress"
