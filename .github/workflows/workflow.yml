@@ -72,8 +72,10 @@ jobs:
           terraform init   
           #terraform state rm aws_eks_node_group.main
           ls -ltar
-          terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_' || true
-
+          #terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_' || true
+          terraform state list | grep -E 'kubernetes_|helm_release|aws_eks_|data.aws_eks_' || true
+              terraform state rm helm_release.ingress_nginx || true
+              terraform state rm kubernetes_ingress_v1.bank_frontend || true
           #terraform state rm \
             #aws_eks_cluster.main \
             #aws_eks_access_entry.ci_admin \
@@ -90,7 +92,8 @@ jobs:
             #helm_release.aws_load_balancer_controller \
             #helm_release.ebs_csi_driver
           terraform state rm \
-            aws_eks_cluster.main
+            helm_release.ingress_nginx \
+            kubernetes_ingress_v1.bank_frontend
 
       - name: Terraform Init
         working-directory: ./terraform
