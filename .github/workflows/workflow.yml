@@ -118,6 +118,18 @@ jobs:
         run: | 
           terraform init  
           terraform plan -out=tfplan
+          terraform apply \
+            -target=aws_vpc.vpc \
+            -target=aws_subnet.public-kunle-subnet \
+            -target=aws_subnet.public-kunle-subnet-2 \
+            -target=aws_internet_gateway.kunle-igw \
+            -target=aws_eks_cluster.main \
+            -target=aws_eks_node_group.main \
+            -target=aws_iam_openid_connect_provider.eks \
+            -auto-approve
+
+          terraform plan -out=tfplan
+          
 
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
