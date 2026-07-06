@@ -113,7 +113,9 @@ jobs:
       - name: Terraform Plan
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
-        run: terraform plan -out=tfplan
+        run: | 
+          terraform init  
+          terraform plan -out=tfplan
 
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
