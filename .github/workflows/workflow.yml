@@ -116,13 +116,22 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: | 
-          terraform init  
-          terraform plan -out=tfplan
-          terraform apply \
+          terraform init   
+          terraform apply \ 
             -target=aws_vpc.vpc \
             -target=aws_subnet.public-kunle-subnet \
             -target=aws_subnet.public-kunle-subnet-2 \
             -target=aws_internet_gateway.kunle-igw \
+            -target=aws_route_table.public-kunle-rt \
+            -target=aws_route_table_association.public_subnet_1 \
+            -target=aws_route_table_association.public_subnet_2 \
+            -target=aws_security_group.public-kunle-sg \
+            -target=aws_iam_role.eks_cluster \
+            -target=aws_iam_role.eks_nodes \
+            -target=aws_iam_role_policy_attachment.eks_cluster_policy \
+            -target=aws_iam_role_policy_attachment.eks_worker_node_policy \
+            -target=aws_iam_role_policy_attachment.eks_cni_policy \
+            -target=aws_iam_role_policy_attachment.eks_registry_policy \
             -target=aws_eks_cluster.main \
             -target=aws_eks_node_group.main \
             -target=aws_iam_openid_connect_provider.eks \
