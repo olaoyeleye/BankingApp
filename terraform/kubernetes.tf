@@ -230,7 +230,7 @@ resource "helm_release" "ebs_csi_driver" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+  #  aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
     aws_iam_openid_connect_provider.eks
   ]
@@ -261,11 +261,11 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
   })
 }
 
-resource "aws_iam_policy" "aws_load_balancer_controller" {
-  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
-  description = "IAM Policy for AWS Load Balancer Controller"
-  policy      = file("${path.module}/iam_policy.json")
-  }
+#resource "aws_iam_policy" "aws_load_balancer_controller" {
+#  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
+#  description = "IAM Policy for AWS Load Balancer Controller"
+#  policy      = file("${path.module}/iam_policy.json")
+#}
 
 
 resource "aws_iam_policy" "aws_load_balancer_controller" {
