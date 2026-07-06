@@ -69,7 +69,7 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: | 
-          #terraform init   
+          terraform init   
           #terraform state rm aws_eks_node_group.main
           ls -ltar
           terraform state rm \
