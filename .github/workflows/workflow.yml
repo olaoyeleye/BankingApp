@@ -74,8 +74,7 @@ jobs:
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
-        run: |
-          terraform init #-reconfigure
+        run: | 
           echo "Checking if EKS cluster exists..."
           CLUSTER_EXISTS=$(aws eks list-clusters \
             --region "${{ secrets.AWS_REGION }}" \
@@ -138,7 +137,6 @@ jobs:
             -target=aws_eks_cluster.main \
             -target=aws_eks_node_group.main \
             -target=aws_iam_openid_connect_provider.eks \
-            -var-file=terraform.tfvars \
             -auto-approve
             
       - name: Terraform Plan 
@@ -151,7 +149,7 @@ jobs:
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
-        run: terraform apply -var-file=terraform.tfvars -auto-approve 
+        run: terraform apply -auto-approve tfplan
 
       - name: Install kubectl
         if: steps.set-action.outputs.action != 'destroy'
