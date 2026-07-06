@@ -63,7 +63,21 @@ jobs:
           key_name              = "${{ secrets.KEY_NAME }}"
           EOF
 
-  
+      - name: Terraform Init_A
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          terraform init
+          terraform state list || true
+
+          terraform state rm data.aws_eks_cluster.main || true
+          terraform state rm data.aws_eks_cluster_auth.main || true
+
+          terraform state list || true
+
+
+
       - name: Terraform Init1
         working-directory: ./terraform
         env:
