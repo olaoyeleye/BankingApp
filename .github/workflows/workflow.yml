@@ -120,7 +120,7 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |    
-          terraform apply \ 
+          terraform apply \
             -target=aws_vpc.vpc \
             -target=aws_subnet.public-kunle-subnet \
             -target=aws_subnet.public-kunle-subnet-2 \
