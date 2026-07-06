@@ -73,15 +73,19 @@ jobs:
           #terraform state rm aws_eks_node_group.main
           ls -ltar
           terraform state rm \
-            aws_eks_cluster.main \
-            aws_eks_access_entry.ci_admin \
-            aws_eks_access_entry.node_role \
-            aws_eks_access_policy_association.ci_admin_policy \
-            aws_iam_openid_connect_provider.eks \
-            aws_iam_role.aws_load_balancer_controller \
-            aws_iam_role.ebs_csi_role \
-            aws_iam_role.eks_cluster \
-            aws_iam_role.eks_nodes
+            #aws_eks_cluster.main \
+            #aws_eks_access_entry.ci_admin \
+            #aws_eks_access_entry.node_role \
+            #aws_eks_access_policy_association.ci_admin_policy \
+            #aws_iam_openid_connect_provider.eks \
+            #aws_iam_role.aws_load_balancer_controller \
+            #aws_iam_role.ebs_csi_role \
+            #aws_iam_role.eks_cluster \
+            #aws_iam_role.eks_nodes\
+            kubernetes_namespace_v1.ingress_nginx \
+            kubernetes_service_v1.bank_frontend \
+            helm_release.aws_load_balancer_controller \
+            helm_release.ebs_csi_driver
 
 
       - name: Terraform Init
