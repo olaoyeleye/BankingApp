@@ -126,7 +126,8 @@ jobs:
             -target=aws_iam_role.ebs_csi_role \
             -target=aws_eks_access_entry.ci_admin \
             -target=aws_eks_access_entry.node_role \
-            -target=aws_eks_access_policy_association.ci_admin_policy --auto-approve
+            -target=aws_eks_access_policy_association.ci_admin_policy \
+            --auto-approve
 
           terraform apply -auto-approve tfplan        # apply changes and update state
           
