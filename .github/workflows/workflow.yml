@@ -90,10 +90,14 @@ jobs:
             #kubernetes_namespace_v1.ingress_nginx \
             #kubernetes_service_v1.bank_frontend \
             #helm_release.aws_load_balancer_controller \
-            #helm_release.ebs_csi_driver
-          terraform state rm \
-            helm_release.ingress_nginx \
-            kubernetes_ingress_v1.bank_frontend
+            #helm_release.ebs_csi_driver \
+            #helm_release.ingress_nginx \
+            #kubernetes_ingress_v1.bank_frontend
+          terraform state rm helm_release.ingress_nginx || true
+          terraform state rm kubernetes_ingress_v1.bank_frontend || true
+
+
+
 
       - name: Terraform Init
         working-directory: ./terraform
