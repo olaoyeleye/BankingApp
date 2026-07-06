@@ -75,6 +75,7 @@ jobs:
         working-directory: ./terraform
         shell: bash
         run: |
+          terraform init #-reconfigure
           echo "Checking if EKS cluster exists..."
           CLUSTER_EXISTS=$(aws eks list-clusters \
             --region "${{ secrets.AWS_REGION }}" \
@@ -109,14 +110,16 @@ jobs:
               echo "OIDC Provider is already tracked in state."
             fi
           fi
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
 
       - name: Terraform Plan
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: | 
-          terraform init   
+        run: |    
           terraform apply \ 
             -target=aws_vpc.vpc \
             -target=aws_subnet.public-kunle-subnet \
@@ -135,6 +138,7 @@ jobs:
             -target=aws_eks_cluster.main \
             -target=aws_eks_node_group.main \
             -target=aws_iam_openid_connect_provider.eks \
+            -var-file=terraform.tfvars \
             -auto-approve
             
       - name: Terraform Plan 
@@ -147,7 +151,7 @@ jobs:
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -var-file=terraform.tfvars -auto-approve 
 
       - name: Install kubectl
         if: steps.set-action.outputs.action != 'destroy'
