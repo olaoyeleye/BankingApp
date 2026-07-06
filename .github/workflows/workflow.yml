@@ -361,14 +361,25 @@ jobs:
           echo "tx_lb=$TX_LB" >> "$GITHUB_OUTPUT"
           echo "activity_lb=$ACTIVITY_LB" >> "$GITHUB_OUTPUT"
 
+      # - name: Update frontend API endpoints
+      #   if: steps.set-action.outputs.action != 'destroy'
+      #   working-directory: ./techbleat-global-bank-frontend
+      #   shell: bash
+      #   run: |
+      #     sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "http://${{ steps.get-lb-urls.outputs.user_lb }}:8000";|' src/App.jsx
+      #     sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "http://${{ steps.get-lb-urls.outputs.tx_lb }}:8080";|' src/App.jsx
+      #     sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "http://${{ steps.get-lb-urls.outputs.activity_lb }}:8001";|' src/App.jsx
+
       - name: Update frontend API endpoints
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./techbleat-global-bank-frontend
         shell: bash
         run: |
-          sed -i 's|const USER_API = "http://[^"]*";|const USER_API = "http://${{ steps.get-lb-urls.outputs.user_lb }}:8000";|' src/App.jsx
-          sed -i 's|const TX_API = "http://[^"]*";|const TX_API = "http://${{ steps.get-lb-urls.outputs.tx_lb }}:8080";|' src/App.jsx
-          sed -i 's|const ACTIVITY_API = "http://[^"]*";|const ACTIVITY_API = "http://${{ steps.get-lb-urls.outputs.activity_lb }}:8001";|' src/App.jsx
+          sed -i 's|const USER_API = "http://[^"]*:";|const USER_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/users";|' src/App.jsx
+          sed -i 's|const TX_API = "http://[^"]*:";|const TX_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/transactions";|' src/App.jsx
+          sed -i 's|const ACTIVITY_API = "http://[^"]*:";|const ACTIVITY_API = "https://${{ steps.get-lb-urls.outputs.ingress_host }}/activities";|' src/App.jsx
+        #sed -i 's|const API_BASE = "http://[^"]*";|const API_BASE = "https://${{ steps.get-lb-urls.outputs.ingress_host }}";|' src/App.jsx
+
 
       - name: Build, Tag and Push frontend image to ECR
         if: steps.set-action.outputs.action != 'destroy'
