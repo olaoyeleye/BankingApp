@@ -56,8 +56,13 @@ jobs:
         run: terraform init -upgrade
 
       - name: Terraform Format Check
-        working-directory: ./terraform
-        run: ls -ltar
+        working-directory: ./terraform 
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          ls -ltar
+          terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
+          terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
 
       - name: Terraform Validate
         working-directory: ./terraform
