@@ -78,6 +78,47 @@ jobs:
             --name "${{ secrets.EKS_CLUSTER_NAME }}" \
             --region "${{ secrets.AWS_REGION }}"
           kubectl get ns
+ 
+      - name: Terraform Destroy 
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+            
+          # Step 1: clean up kubernetes resources first
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          # Delete ingress first (removes AWS load balancers)
+          kubectl delete ingress --all -n banking --ignore-not-found=true
+          kubectl delete ingress --all -n ingress-nginx --ignore-not-found=true
+
+          # Wait for LBs to be deprovisioned
+          echo "Waiting for load balancers to be removed..."
+          sleep 60
+
+          # Delete services that create LBs
+          kubectl delete service --all -n banking --ignore-not-found=true
+
+          # Delete PVCs (releases EBS volumes)
+          kubectl delete pvc --all -n banking --ignore-not-found=true
+          kubectl delete pvc --all --all-namespaces --ignore-not-found=true
+
+          # Wait for volumes to detach
+          sleep 30
+
+          # Delete namespaces (cleans everything else)
+          kubectl delete namespace banking --ignore-not-found=true --timeout=60s || true
+          kubectl delete namespace ingress-nginx --ignore-not-found=true --timeout=60s || true
+
+          # Step 2: now destroy AWS infrastructure
+          TF_VAR_eks_admin_principal_arn="${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}" \
+          terraform destroy -auto-approve
+
+
 
       - name: Cleanup Kubernetes public resources
         #if: github.event.inputs.terraform_action == 'destroy'
