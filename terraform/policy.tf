@@ -20,8 +20,7 @@ resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
 
 
 
-
-resource "kubernetes_cluster_role_binding" "terraform_destroy_admin" {
+resource "kubernetes_cluster_role_binding_v1" "terraform_destroy_admin" {
   metadata {
     name = "terraform-destroy-admin"
   }
@@ -34,7 +33,7 @@ resource "kubernetes_cluster_role_binding" "terraform_destroy_admin" {
 
   subject {
     kind      = "User"
-    name      = "tai"  
+    name      = "YOUR_EKS_USERNAME" # must match the Kubernetes username for your IAM principal
     api_group = "rbac.authorization.k8s.io"
   }
 }
