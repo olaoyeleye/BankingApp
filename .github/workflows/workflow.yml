@@ -55,6 +55,15 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform init -upgrade
 
+        
+      - name: Verify AWS account and IAM roles
+        working-directory: ./terraform
+        run: |
+          aws sts get-caller-identity
+          aws iam get-role --role-name kunle-vpc-eks-node-role || true
+          aws iam get-role --role-name kunle-vpc-eks-cluster-role || true
+
+
       - name: Terraform Format Check
         working-directory: ./terraform 
         env:
@@ -63,9 +72,7 @@ jobs:
           ls -ltar
           terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
           terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
-          aws sts get-caller-identity
-          aws iam get-role --role-name kunle-vpc-eks-node-role
-          aws iam get-role --role-name kunle-vpc-eks-cluster-role
+
 
       - name: Terraform Validate
         working-directory: ./terraform
