@@ -70,6 +70,8 @@ jobs:
         run: terraform apply -auto-approve tfplan
 
       - name: Update kubeconfig before destroy
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         #if: github.event.inputs.terraform_action == 'destroy'
         run: |
           aws eks update-kubeconfig \
@@ -77,6 +79,8 @@ jobs:
             --region "${{ secrets.AWS_REGION }}"
 
       - name: Cleanup Kubernetes public resources
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         #if: github.event.inputs.terraform_action == 'destroy'
         run: |
           kubectl delete ingress --all -A --ignore-not-found || true
