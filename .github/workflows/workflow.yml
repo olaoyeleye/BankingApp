@@ -120,6 +120,10 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |  
+          terraform state rm kubernetes_namespace_v1.banking || true
+          terraform state rm kubernetes_namespace_v1.ingress_nginx || true
+          terraform state rm kubernetes_service_v1.bank_frontend || true
+          terraform state rm helm_release.ebs_csi_driver || true
           terraform state rm kubernetes_namespace_v1.ingress_nginx || true 
           terraform state rm kubernetes_namespace_v1.banking || true 
           terraform state rm kubernetes_service_v1.bank_frontend || true 
