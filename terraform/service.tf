@@ -21,7 +21,7 @@
 
 #    type = "ClusterIP"
 #  }
-  
+
 #  depends_on = [kubernetes_namespace_v1.banking]
 
 #}
@@ -62,7 +62,7 @@ resource "kubernetes_service_v1" "bank_frontend" {
 
     type = "ClusterIP"
   }
-  
+
   depends_on = [kubernetes_namespace_v1.banking]
 
 }
