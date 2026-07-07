@@ -1,39 +1,21 @@
-resource "aws_iam_role_policy_attachment" "eks_compute_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
+# EKS cluster role policy
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
   role       = aws_iam_role.eks_cluster.name
 }
 
-resource "aws_iam_role_policy_attachment" "eks_blockstorage_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy"
-  role       = aws_iam_role.eks_cluster.name
+# EKS node role policies
+resource "aws_iam_role_policy_attachment" "eks_nodes_worker_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_nodes.name
 }
 
-resource "aws_iam_role_policy_attachment" "eks_loadbalancing_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
-  role       = aws_iam_role.eks_cluster.name
+resource "aws_iam_role_policy_attachment" "eks_nodes_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_nodes.name
 }
 
-resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
-  role       = aws_iam_role.eks_cluster.name
-}
-
-
-
-resource "kubernetes_cluster_role_binding_v1" "terraform_destroy_admin" {
-  metadata {
-    name = "terraform-destroy-admin"
-  }
-
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "cluster-admin"
-  }
-
-  subject {
-    kind      = "User"
-    name      = "YOUR_EKS_USERNAME" # must match the Kubernetes username for your IAM principal
-    api_group = "rbac.authorization.k8s.io"
-  }
+resource "aws_iam_role_policy_attachment" "eks_nodes_ecr_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_nodes.name
 }
