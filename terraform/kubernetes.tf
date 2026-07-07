@@ -124,7 +124,8 @@ resource "aws_eks_node_group" "main" {
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
-  instance_types  = ["t3.small"]
+  instance_types  = ["t3.small"] 
+
 
   subnet_ids = [
     aws_subnet.public-kunle-subnet.id,
