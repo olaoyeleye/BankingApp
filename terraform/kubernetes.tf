@@ -126,7 +126,6 @@ resource "aws_eks_node_group" "main" {
   ami_type        = "AL2023_x86_64_STANDARD"
   instance_types  = ["t3.small"]
 
-
   subnet_ids = [
     aws_subnet.public-kunle-subnet.id,
     aws_subnet.public-kunle-subnet-2.id
@@ -231,6 +230,7 @@ resource "helm_release" "ebs_csi_driver" {
   }
 
   depends_on = [
+  #  aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
     aws_iam_openid_connect_provider.eks
   ]
@@ -532,12 +532,17 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   role       = aws_iam_role.aws_load_balancer_controller.name
 }
 
- resource "helm_release" "aws_load_balancer_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "1.7.2"
+resource "helm_release" "aws_load_balancer_controller" {
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  namespace        = "kube-system"
+  version          = "1.7.2"
+  create_namespace = false
+  wait             = true
+  timeout          = 900
+  atomic           = false
+  cleanup_on_fail  = false
 
   set {
     name  = "clusterName"
@@ -560,17 +565,19 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   }
 
   set {
-    name  = "vpcId"
-    value = aws_vpc.vpc.id
-  }
-
-  set {
     name  = "region"
     value = var.region
   }
 
+  set {
+    name  = "vpcId"
+    value = aws_vpc.vpc.id
+  }
+
   depends_on = [
     aws_eks_node_group.main,
-    aws_iam_role_policy_attachment.aws_load_balancer_controller
+    aws_iam_role_policy_attachment.aws_load_balancer_controller,
+    helm_release.ebs_csi_driver,
+    aws_eks_access_policy_association.ci_admin_policy
   ]
 }
