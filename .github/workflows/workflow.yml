@@ -1,0 +1,93 @@
+name: Deploy Entire Infra
+
+on:
+  push:
+    branches: ["dev", "main", "feat-dev", "master"]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Terraform action to run"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Create terraform.tfvars
+        working-directory: ./terraform
+        run: |
+          cat > terraform.tfvars <<EOF
+          region                = "${{ secrets.AWS_REGION }}"
+          ami                   = "${{ secrets.AMI_ID }}"
+          instance_type         = "${{ secrets.INSTANCE_TYPE }}"
+          instance-name-nginx   = "${{ secrets.INSTANCE_NAME_NGINX }}"
+          vpc_name              = "${{ secrets.VPC_NAME }}"
+          key_name              = "${{ secrets.KEY_NAME }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform init
+
+      - name: Terraform Plan
+        if: github.event.inputs.terraform_action == 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.terraform_action == 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Update kubeconfig before destroy
+        #if: github.event.inputs.terraform_action == 'destroy'
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+      - name: Cleanup Kubernetes public resources
+        #if: github.event.inputs.terraform_action == 'destroy'
+        run: |
+          kubectl delete ingress --all -A --ignore-not-found || true
+          kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
+          helm uninstall aws-ebs-csi-driver -n kube-system || true
+          helm uninstall ingress-nginx -n ingress-nginx || true
+          sleep 120
+
+      - name: Terraform Destroy
+       #if: github.event.inputs.terraform_action == 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform destroy -auto-approve
