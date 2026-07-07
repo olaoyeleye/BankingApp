@@ -55,9 +55,11 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform init -upgrade
 
-        
+
       - name: Verify AWS account and IAM roles
         working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
           aws sts get-caller-identity
           aws iam get-role --role-name kunle-vpc-eks-node-role || true
