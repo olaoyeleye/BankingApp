@@ -1,24 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "6.28.0"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.32"
-    }
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.12"
-    }
-  }
-}
-
-provider "aws" {
-  region = "eu-west-1"
-}
-
 data "aws_eks_cluster" "main" {
   name = aws_eks_cluster.main.name
 }
