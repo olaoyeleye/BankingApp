@@ -56,51 +56,21 @@ jobs:
         run: terraform init -upgrade
 
 
-      - name: Verify AWS account and IAM roles
+        
+      - name: Stage 2 Full Apply
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          aws sts get-caller-identity
-          aws iam get-role --role-name kunle-vpc-eks-node-role || true
-          aws iam get-role --role-name kunle-vpc-eks-cluster-role || true
+        run: terraform apply -auto-approve tfplan
 
 
-      - name: Terraform Format Check
-        working-directory: ./terraform 
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          ls -ltar
-          terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
-          terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
 
-
-      - name: Terraform Validate
+      - name: Terraform Apply pass 1 - create cluster
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform validate
-
-      - name: Stage 1 Plan EKS
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          terraform plan \
-            -target=aws_eks_cluster.main \
-            -target=aws_eks_node_group.main \
-            -target=aws_eks_access_entry.ci_admin \
-            -target=aws_eks_access_policy_association.ci_admin_policy \
-            -target=aws_eks_access_entry.node_role \
-            -out=tfplan-eks
-
-      - name: Stage 1 Apply EKS
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform apply -auto-approve tfplan-eks
-
+        run: terraform apply -auto-approve tfplan || true
+ 
       - name: Wait for node group
         run: |
           aws eks wait nodegroup-active \
@@ -115,14 +85,33 @@ jobs:
             --region "${{ secrets.AWS_REGION }}"
           kubectl get nodes || true
 
-      - name: Stage 2 Full Plan
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform plan -out=tfplan
-
-      - name: Stage 2 Full Apply
+      - name: Terraform Apply pass 2 - install helm charts
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform apply -auto-approve tfplan
+
+
+
+
+      # - name: Verify AWS account and IAM roles
+      #   working-directory: ./terraform
+      #   env:
+      #     TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+      #   run: |
+      #     aws sts get-caller-identity
+      #     aws iam get-role --role-name kunle-vpc-eks-node-role || true
+      #     aws iam get-role --role-name kunle-vpc-eks-cluster-role || true
+
+
+      - name: Terraform Format Check
+        working-directory: ./terraform 
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          ls -ltar
+          #terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
+          #terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
+
+ 
+ 
