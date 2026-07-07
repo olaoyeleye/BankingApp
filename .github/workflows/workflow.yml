@@ -55,6 +55,8 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform init
 
+
+
       - name: Terraform Plan
         #if: github.event.inputs.terraform_action != 'destroy'
         working-directory: ./terraform
