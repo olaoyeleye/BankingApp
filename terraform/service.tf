@@ -27,6 +27,17 @@
 #}
 
 
+resource "kubernetes_namespace_v1" "ingress_nginx" {
+  metadata {
+    name = "ingress-nginx"
+  }
+}
+
+resource "kubernetes_namespace_v1" "banking" {
+  metadata {
+    name = "banking"
+  }
+}
 
 resource "kubernetes_service_v1" "bank_frontend" {
   metadata {
