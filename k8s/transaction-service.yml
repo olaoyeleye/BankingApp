@@ -38,16 +38,16 @@ spec:
             - configMapRef:
                 name: banking-config
 
-# ---
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: transaction-service
-#   namespace: banking
-# spec:
-#   selector:
-#     app: transaction-service
-#   ports:
-#     - port: 8080
-#       targetPort: 8080
-#   type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: banking
+spec:
+  selector:
+    app: transaction-service
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: LoadBalancer
