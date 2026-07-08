@@ -1,7 +1,7 @@
 resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
   role_arn = data.aws_iam_role.eks_cluster.arn
-  version  = "1.31"
+  version  = "1.33"
 
   vpc_config {
     subnet_ids = [
@@ -56,11 +56,19 @@ resource "aws_eks_node_group" "main" {
     Name = "${var.vpc_name}-node-group"
   }
 }
-
-resource "aws_eks_addon" "ebs_csi" {
+ resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = aws_eks_cluster.main.name
   addon_name               = "aws-ebs-csi-driver"
   service_account_role_arn = aws_iam_role.ebs_csi_role.arn
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  timeouts {
+    create = "10m"
+    update = "10m"
+    delete = "10m"
+  }
 
   depends_on = [
     aws_eks_node_group.main,
@@ -68,7 +76,6 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_iam_role_policy_attachment.eks_nodes_ebs_csi
   ]
 }
-
 # EBS CSI IAM Role
 resource "aws_iam_role" "ebs_csi_role" {
   name = "${var.vpc_name}-ebs-csi-role"
