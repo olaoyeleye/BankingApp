@@ -31,7 +31,8 @@ resource "aws_eks_node_group" "main" {
   node_role_arn   = data.aws_iam_role.eks_nodes.arn
 
   subnet_ids = [
-    aws_subnet.private-kunle-subnet.id
+    aws_subnet.public-kunle-subnet.id,
+    aws_subnet.public-kunle-subnet-2.id
   ]
 
   scaling_config {
