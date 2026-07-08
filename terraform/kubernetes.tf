@@ -1,7 +1,7 @@
 resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
   role_arn = data.aws_iam_role.eks_cluster.arn
-  version  = "1.33"
+  version  = "1.31"
 
   vpc_config {
     subnet_ids = [
@@ -42,7 +42,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   instance_types = [var.instance_type]
-  ami_type       = "AL2_x86_64"
+  ami_type       = "AL2_x86_64"  #"AL2_x86_64"
   capacity_type  = "ON_DEMAND"
 
   depends_on = [
@@ -56,26 +56,64 @@ resource "aws_eks_node_group" "main" {
     Name = "${var.vpc_name}-node-group"
   }
 }
- resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = aws_iam_role.ebs_csi_role.arn
+ #resource "aws_eks_addon" "ebs_csi" {
+ # cluster_name             = aws_eks_cluster.main.name
+ # addon_name               = "aws-ebs-csi-driver"
+ # service_account_role_arn = aws_iam_role.ebs_csi_role.arn
 
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
+ # resolve_conflicts_on_create = "OVERWRITE"
+ # resolve_conflicts_on_update = "OVERWRITE"
 
-  timeouts {
-    create = "10m"
-    update = "10m"
-    delete = "10m"
+ # timeouts {
+ #   create = "10m"
+ #   update = "10m"
+ #   delete = "10m"
+ # }
+
+ # depends_on = [
+ #   aws_eks_node_group.main,
+ #   aws_iam_role_policy_attachment.ebs_csi_policy,
+ #   aws_iam_role_policy_attachment.eks_nodes_ebs_csi
+ # ]
+#}
+
+resource "helm_release" "ebs_csi_driver" {
+  name       = "aws-ebs-csi-driver"
+  repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
+  chart      = "aws-ebs-csi-driver"
+  namespace  = "kube-system"
+  version    = "2.30.0"
+
+  wait            = true
+  timeout         = 900
+  atomic          = false
+  cleanup_on_fail = false
+
+  set {
+    name  = "controller.serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "controller.serviceAccount.name"
+    value = "ebs-csi-controller-sa"
+  }
+
+  set {
+    name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.ebs_csi_role.arn
   }
 
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.ebs_csi_policy,
-    aws_iam_role_policy_attachment.eks_nodes_ebs_csi
+    aws_iam_openid_connect_provider.eks
   ]
 }
+
+
+
+
 # EBS CSI IAM Role
 resource "aws_iam_role" "ebs_csi_role" {
   name = "${var.vpc_name}-ebs-csi-role"
