@@ -1,5 +1,4 @@
 name: Deploy Entire Infra
-
 on:
   push:
     branches: ["dev", "main", "feat-dev", "master"]
