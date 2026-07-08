@@ -115,7 +115,7 @@ jobs:
 
 
       - name: Terraform Apply Specifics
-        if: steps.set-action.outputs.action == 'destroy'
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
