@@ -155,6 +155,9 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
+          terraform state rm aws_eks_cluster.main || true
+          terraform state rm aws_iam_role.eks_cluster || true 
+          terraform state rm aws_eks_node_group.main || true
           terraform import aws_eks_cluster.main kunle-vpc-cluster || true
           terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role || true
           terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role || true
