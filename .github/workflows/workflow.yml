@@ -113,9 +113,6 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform init
-          terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
-          terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
-
 
       - name: Terraform Apply Specifics
         if: steps.set-action.outputs.action == 'destroy'
@@ -157,7 +154,10 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform plan -out=tfplan
+        run: | 
+          terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role || true
+          terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role || true
+          terraform plan -out=tfplan
 
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
