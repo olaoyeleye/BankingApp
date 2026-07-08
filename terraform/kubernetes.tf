@@ -113,10 +113,3 @@ resource "aws_iam_openid_connect_provider" "eks" {
 }
 
 
-data "aws_iam_role" "eks_cluster" {
-  name = "${var.vpc_name}-eks-cluster-role"
-}
-
-data "aws_iam_role" "eks_nodes" {
-  name = "${var.vpc_name}-eks-node-role"
-}
