@@ -89,21 +89,20 @@ resource "helm_release" "ebs_csi_driver" {
   atomic          = false
   cleanup_on_fail = false
 
-  # Use dynamic content or explicit blocks with the proper structure
-  set {
-    name  = "controller.serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "controller.serviceAccount.name"
-    value = "ebs-csi-controller-sa"
-  }
-
-  set {
-    name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.ebs_csi_role.arn
-  }
+  # Clean YAML format instead of individual set blocks
+  values = [
+    jsonencode({
+      controller = {
+        serviceAccount = {
+          create = true
+          name   = "ebs-csi-controller-sa"
+          annotations = {
+            "eks.amazonaws.com/role-arn" = aws_iam_role.ebs_csi_role.arn
+          }
+        }
+      }
+    })
+  ]
 
   depends_on = [
     aws_eks_node_group.main,
@@ -111,7 +110,6 @@ resource "helm_release" "ebs_csi_driver" {
     aws_iam_openid_connect_provider.eks
   ]
 }
-
 
 
 # EBS CSI IAM Role
