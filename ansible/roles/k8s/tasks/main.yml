@@ -247,7 +247,7 @@
 - name: Wait for postgres
   shell: |
     kubectl wait --for=condition=ready pod \
-      -l app=postgres -n banking --timeout=180s
+      -l app=postgres -n banking --timeout=600s
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user

@@ -490,3 +490,143 @@ jobs:
             -e "ssh -i /home/runner/.ssh/ansible_key.pem -o StrictHostKeyChecking=no" \
             ${{ github.workspace }}/ \
             ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }}:/home/ec2-user/manifest-repo/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: Destroy EKS Cleanly
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  TF_WORKING_DIR: ./terraform
+  CLUSTER_NAME: kunle-vpc-cluster
+  NODEGROUP_NAME: kunle-vpc-node-group
+  EKS_CLUSTER_ROLE: kunle-vpc-eks-cluster-role
+  EKS_NODE_ROLE: kunle-vpc-eks-node-role
+
+jobs:
+  cleanup-eks:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Delete EKS node group
+        run: |
+          aws eks delete-nodegroup \
+            --cluster-name "$CLUSTER_NAME" \
+            --nodegroup-name "$NODEGROUP_NAME" \
+            --region "$AWS_REGION" || true
+
+      - name: Wait for node group deletion
+        run: |
+          for i in {1..40}; do
+            if aws eks describe-nodegroup \
+              --cluster-name "$CLUSTER_NAME" \
+              --nodegroup-name "$NODEGROUP_NAME" \
+              --region "$AWS_REGION" >/dev/null 2>&1; then
+              echo "Node group still exists, waiting..."
+              sleep 30
+            else
+              echo "Node group deleted."
+              exit 0
+            fi
+          done
+          echo "Timed out waiting for node group deletion"
+          exit 1
+
+      - name: Delete EKS cluster
+        run: |
+          aws eks delete-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" || true
+
+      - name: Wait for cluster deletion
+        run: |
+          for i in {1..40}; do
+            if aws eks describe-cluster \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" >/dev/null 2>&1; then
+              echo "Cluster still exists, waiting..."
+              sleep 30
+            else
+              echo "Cluster deleted."
+              exit 0
+            fi
+          done
+          echo "Timed out waiting for cluster deletion"
+          exit 1
+
+      - name: Remove stale Terraform state
+        run: |
+          terraform state rm aws_eks_node_group.main || true
+          terraform state rm aws_eks_cluster.main || true
+          terraform state rm kubernetes_namespace_v1.ingress_nginx || true
+          terraform state rm kubernetes_namespace_v1.banking || true
+          terraform state rm kubernetes_service_v1.bank_frontend || true
+          terraform state rm helm_release.ebs_csi_driver || true
+
+      - name: Detach and delete IAM roles
+        run: |
+          aws iam detach-role-policy \
+            --role-name "$EKS_CLUSTER_ROLE" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy || true
+
+          aws iam delete-role \
+            --role-name "$EKS_CLUSTER_ROLE" || true
+
+          aws iam detach-role-policy \
+            --role-name "$EKS_NODE_ROLE" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy || true
+
+          aws iam detach-role-policy \
+            --role-name "$EKS_NODE_ROLE" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy || true
+
+          aws iam detach-role-policy \
+            --role-name "$EKS_NODE_ROLE" \
+            --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly || true
+
+          aws iam delete-role \
+            --role-name "$EKS_NODE_ROLE" || true
+
+      - name: Terraform destroy remaining infrastructure
+        run: terraform destroy -auto-approve
