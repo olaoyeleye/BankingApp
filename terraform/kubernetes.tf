@@ -89,6 +89,7 @@ resource "helm_release" "ebs_csi_driver" {
   atomic          = false
   cleanup_on_fail = false
 
+  # Use dynamic content or explicit blocks with the proper structure
   set {
     name  = "controller.serviceAccount.create"
     value = "true"
@@ -110,7 +111,6 @@ resource "helm_release" "ebs_csi_driver" {
     aws_iam_openid_connect_provider.eks
   ]
 }
-
 
 
 
