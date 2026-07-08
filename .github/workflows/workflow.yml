@@ -111,7 +111,10 @@ jobs:
           fi
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init
+        run: |
+          terraform init
+          terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role
+          terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role
 
 
       - name: Terraform Apply Specifics
