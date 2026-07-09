@@ -268,6 +268,21 @@
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   ignore_errors: true
 
+
+- name: Wait for ingress
+  shell: |
+    kubectl wait --for=condition=ready pod \
+      -l app=ingress -n banking --timeout=300s
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  ignore_errors: true
+
+
 - name: Final pod status
   shell: kubectl get pods -n banking
   become_user: ec2-user
