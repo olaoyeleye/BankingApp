@@ -39,5 +39,21 @@ variable "postgres_image" {
   default     = "YOUR_ECR_URL/bank-app-postgres:latest"
 }
 
-variable "instance_type" {         
+variable "instance_type" {
+  type = string
+}
+
+variable "ami" {
+  type    = string
+  default = "ami-09c54d172e7aa3d9a"
+}
+
+variable "key_name" {
+  type    = string
+  default = "tai-key"
+}
+
+variable "instance-name-nginx" {
+  type    = string
+  default = "nginx-node"
 }
