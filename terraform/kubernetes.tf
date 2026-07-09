@@ -190,17 +190,17 @@ resource "helm_release" "ebs_csi_driver" {
   atomic          = false
   cleanup_on_fail = false
 
-  set {
+  set ={
     name  = "controller.serviceAccount.create"
     value = "true"
   }
 
-  set {
+  set ={
     name  = "controller.serviceAccount.name"
     value = "ebs-csi-controller-sa"
   }
 
-  set {
+  set ={
     name  = "controller.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = aws_iam_role.ebs_csi_role.arn
   }
