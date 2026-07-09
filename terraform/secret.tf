@@ -10,7 +10,7 @@ locals {
 resource "kubernetes_secret_v1" "banking_secrets" {
   metadata {
     name      = "banking-secrets"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
   }
 
   type = "Opaque"

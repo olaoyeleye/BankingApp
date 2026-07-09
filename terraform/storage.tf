@@ -22,7 +22,7 @@ resource "kubernetes_storage_class_v1" "gp2" {
 resource "kubernetes_persistent_volume_claim_v1" "postgres_pvc" {
   metadata {
     name      = "postgres-pvc"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
   }
 
   spec {
