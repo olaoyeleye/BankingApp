@@ -49,6 +49,7 @@ variable "ami" {
 }
 
 
+
 variable "key_name" {
   type    = string
   default = "jumy-key"
