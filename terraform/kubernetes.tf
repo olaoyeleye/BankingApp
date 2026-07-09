@@ -80,7 +80,7 @@ resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
 
 resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
-  role_arn = data.aws_iam_role.eks_cluster.arn
+  role_arn = aws_iam_role.eks_cluster.arn
 
   access_config {
     authentication_mode = "API_AND_CONFIG_MAP"
