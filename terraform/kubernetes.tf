@@ -4,75 +4,57 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-resource "aws_iam_role" "eks_cluster" {
+data "aws_iam_role" "eks_cluster" {
   name = "${var.vpc_name}-eks-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "eks.amazonaws.com" }
-    }]
-  })
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster.name
+  role       = data.aws_iam_role.eks_cluster.name
 }
 
-resource "aws_iam_role" "eks_nodes" {
+data "aws_iam_role" "eks_nodes" {
   name = "${var.vpc_name}-eks-node-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-    }]
-  })
 }
 
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_nodes.name
+  role       = data.aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_nodes.name
+  role       = data.aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_nodes.name
+  role       = data.aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_compute_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
-  role       = aws_iam_role.eks_cluster.name
+  role       = data.aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_blockstorage_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy"
-  role       = aws_iam_role.eks_cluster.name
+  role       = data.aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_loadbalancing_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
-  role       = aws_iam_role.eks_cluster.name
+  role       = data.aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
-  role       = aws_iam_role.eks_cluster.name
+  role       = data.aws_iam_role.eks_cluster.name
 }
 
 resource "aws_eks_cluster" "main" {
   name     = "${var.vpc_name}-cluster"
-  role_arn = aws_iam_role.eks_cluster.arn
+  role_arn = data.aws_iam_role.eks_cluster.arn
 
   access_config {
     authentication_mode = "API_AND_CONFIG_MAP"
@@ -117,14 +99,14 @@ resource "aws_eks_access_policy_association" "ci_admin_policy" {
 
 resource "aws_eks_access_entry" "node_role" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = aws_iam_role.eks_nodes.arn
+  principal_arn = data.aws_iam_role.eks_nodes.arn
   type          = "EC2_LINUX"
 }
 
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
-  node_role_arn   = aws_iam_role.eks_nodes.arn
+  node_role_arn   = data.aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
   instance_types  = [var.instance_type]
 
