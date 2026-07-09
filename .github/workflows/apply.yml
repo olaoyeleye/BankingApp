@@ -366,7 +366,7 @@ jobs:
           TX_LB=""
           ACTIVITY_LB=""
 
-          for i in {1..20}; do
+          for i in {1..5}; do
             if kubectl get namespace banking >/dev/null 2>&1; then
               USER_LB=$(kubectl get service user-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
               TX_LB=$(kubectl get service transaction-service -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
