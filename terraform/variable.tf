@@ -38,3 +38,6 @@ variable "postgres_image" {
   type        = string
   default     = "YOUR_ECR_URL/bank-app-postgres:latest"
 }
+
+variable "instance_type" {         
+}
