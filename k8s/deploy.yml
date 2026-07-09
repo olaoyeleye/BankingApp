@@ -14,14 +14,14 @@ spec:
         app: bank-app
     spec:
       containers:
-        - name: bank-app
-          image: my-image  
-          ports:
-            - containerPort: 8000
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "250m"
-            limits:
-              memory: "256Mi"
-              cpu: "500m"
+      - name: bank-app
+        image: my-image
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "96Mi"
+            cpu: "100m"
+          limits:
+            memory: "192Mi"
+            cpu: "200m"

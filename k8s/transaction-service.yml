@@ -14,29 +14,36 @@ spec:
         app: transaction-service
     spec:
       containers:
-        - name: transaction-service
-          image: YOUR_ECR_URL/transaction-service:latest
-          ports:
-            - containerPort: 8080
-          env:
-            - name: SPRING_DATASOURCE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: banking-secrets
-                  key: SPRING_DATASOURCE_URL
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: banking-secrets
-                  key: SPRING_DATASOURCE_USERNAME
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: banking-secrets
-                  key: SPRING_DATASOURCE_PASSWORD
-          envFrom:
-            - configMapRef:
-                name: banking-config
+      - name: transaction-service
+        image: YOUR_ECR_URL/transaction-service:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "96Mi"
+            cpu: "100m"
+          limits:
+            memory: "192Mi"
+            cpu: "200m"
+        env:
+        - name: SPRING_DATASOURCE_URL
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_URL
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_USERNAME
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_PASSWORD
+        envFrom:
+        - configMapRef:
+            name: banking-config
 
 # ---
 # apiVersion: v1

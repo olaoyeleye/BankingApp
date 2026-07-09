@@ -126,7 +126,7 @@ resource "aws_eks_node_group" "main" {
   node_group_name = "main-nodes"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
-  instance_types  = ["t3.small"]
+  instance_types  = [var.instance_type]
 
   subnet_ids = [
     aws_subnet.public_kunle_subnet_a.id,
@@ -135,7 +135,7 @@ resource "aws_eks_node_group" "main" {
 
   scaling_config {
     desired_size = 2
-    max_size     = 2
+    max_size     = 3
     min_size     = 2
   }
 
