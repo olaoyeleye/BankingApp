@@ -1,7 +1,7 @@
 resource "kubernetes_config_map_v1" "postgres_init_sql" {
   metadata {
     name      = "postgres-init-sql"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
   }
 
   data = {
@@ -42,7 +42,7 @@ resource "kubernetes_config_map_v1" "postgres_init_sql" {
 resource "kubernetes_deployment_v1" "postgres" {
   metadata {
     name      = "postgres"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "postgres"
     }

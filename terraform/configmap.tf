@@ -10,7 +10,7 @@ locals {
 resource "kubernetes_config_map_v1" "banking_config" {
   metadata {
     name      = "banking-config"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
   }
 
   data = local.banking_config_data
