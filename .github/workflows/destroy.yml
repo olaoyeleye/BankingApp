@@ -101,6 +101,33 @@ jobs:
           --addon-name aws-ebs-csi-driver \
           --region ${{ secrets.AWS_REGION }} || echo "Done waiting."
 
+
+    - name: Delete EKS cluster in AWS
+      shell: bash
+      run: |
+        set -euo pipefail
+        aws eks delete-cluster \
+          --name tai-key-cluster \
+          --region eu-west-1
+
+    - name: Wait for cluster deletion
+      shell: bash
+      run: |
+        set -euo pipefail
+        until ! aws eks describe-cluster \
+          --name tai-key-cluster \
+          --region eu-west-1 >/dev/null 2>&1; do
+          echo "Cluster still deleting..."
+          sleep 30
+        done
+
+    - name: Remove cluster from Terraform state
+      shell: bash
+      run: |
+        terraform state rm aws_eks_cluster.main || true
+
+
+
     - name: Cleanup EKS security groups in AWS
       shell: bash
       run: |
