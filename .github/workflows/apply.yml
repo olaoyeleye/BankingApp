@@ -114,7 +114,7 @@ jobs:
         run: |
           terraform init --reconfigure
 
-      - name: Terraform Apply Specifics
+      - name: Terraform Apply Specifics.
         if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         env:
