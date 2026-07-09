@@ -5,6 +5,11 @@ resource "helm_release" "ingress_nginx" {
   namespace        = "ingress-nginx"
   create_namespace = true
 
+  timeout          = 900
+  wait             = true
+  cleanup_on_fail  = true
+  atomic           = false
+
   values = [yamlencode({
     controller = {
       service = {
