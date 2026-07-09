@@ -50,7 +50,7 @@ variable "ami" {
 
 variable "key_name" {
   type    = string
-  default = "tai-key"
+  default = "jumy-key"
 }
 
 variable "instance-name-nginx" {
