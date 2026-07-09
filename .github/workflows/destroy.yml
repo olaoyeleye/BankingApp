@@ -101,8 +101,19 @@ jobs:
         terraform state rm aws_iam_role.aws_load_balancer_controller || true
         terraform state rm helm_release.aws_load_balancer_controller || true
 
+
+    - name: Terraform Plan Destroy
+      working-directory: ./terraform
+      shell: bash
+      run: terraform plan -destroy -out=destroy.tfplan
+
     - name: Terraform Destroy
       working-directory: ./terraform
+      shell: bash
       env:
         TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-      run: terraform destroy -auto-approve
+      run: terraform apply -auto-approve destroy.tfplan
+
+      
+ 
+ 
