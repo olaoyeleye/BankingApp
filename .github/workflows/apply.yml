@@ -157,6 +157,8 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
+          helm uninstall ingress-nginx -n ingress-nginx || true
+          terraform state rm helm_release.ingress_nginx || true
           #terraform state rm aws_eks_cluster.main || true
           #terraform state rm aws_iam_role.eks_cluster || true 
           #terraform state rm aws_eks_node_group.main || true
