@@ -87,10 +87,7 @@ jobs:
 
     - name: Clear Pre-existing Addon Conflicts
       run: |
-        aws eks delete-nodegroup \
-          --cluster-name tai-key-cluster \
-          --nodegroup-name main-nodes \
-          --region eu-west-1
+        #aws eks delete-nodegroup --cluster-name tai-key-cluster --nodegroup-name main-nodes --region eu-west-1
         aws eks delete-addon \
           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
           --addon-name aws-ebs-csi-driver \
