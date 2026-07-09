@@ -68,6 +68,8 @@ jobs:
 
     - name: Remove ALB, ingress, and Kubernetes resources
       shell: bash
+      env:
+        TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
       run: |
         kubectl delete ingress --all -A --ignore-not-found || true
         kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
