@@ -6,7 +6,6 @@ data "aws_eks_cluster_auth" "main" {
   name = aws_eks_cluster.main.name
 }
 
-
 resource "helm_release" "ingress_nginx" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -21,4 +20,8 @@ resource "helm_release" "ingress_nginx" {
       }
     }
   })]
+
+  depends_on = [
+    aws_eks_node_group.main
+  ]
 }
