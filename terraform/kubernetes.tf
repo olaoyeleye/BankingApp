@@ -4,7 +4,6 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.vpc_name}-eks-cluster-role"
 
@@ -24,8 +23,10 @@ resource "aws_iam_role" "eks_cluster" {
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = data.aws_iam_role.eks_cluster.name
+  role       = aws_iam_role.eks_cluster.name
 }
+
+
 
 resource "aws_iam_role" "eks_nodes" {
   name = "${var.vpc_name}-eks-node-role"
@@ -44,37 +45,37 @@ resource "aws_iam_role" "eks_nodes" {
 
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = data.aws_iam_role.eks_nodes.name
+  role       = aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = data.aws_iam_role.eks_nodes.name
+  role       = aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = data.aws_iam_role.eks_nodes.name
+  role       = aws_iam_role.eks_nodes.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_compute_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
-  role       = data.aws_iam_role.eks_cluster.name
+  role       = aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_blockstorage_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy"
-  role       = data.aws_iam_role.eks_cluster.name
+  role       = aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_loadbalancing_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
-  role       = data.aws_iam_role.eks_cluster.name
+  role       = aws_iam_role.eks_cluster.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
-  role       = data.aws_iam_role.eks_cluster.name
+  role       = aws_iam_role.eks_cluster.name
 }
 
 resource "aws_eks_cluster" "main" {
