@@ -143,7 +143,7 @@ resource "kubernetes_deployment_v1" "postgres" {
 resource "kubernetes_deployment_v1" "redis" {
   metadata {
     name      = "redis"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "redis"
     }
@@ -182,7 +182,7 @@ resource "kubernetes_deployment_v1" "redis" {
 resource "kubernetes_deployment_v1" "kafka" {
   metadata {
     name      = "kafka"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "kafka"
     }
@@ -228,7 +228,7 @@ resource "kubernetes_deployment_v1" "kafka" {
 resource "kubernetes_deployment_v1" "user_service" {
   metadata {
     name      = "user-service"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "user-service"
     }
@@ -287,7 +287,7 @@ resource "kubernetes_deployment_v1" "user_service" {
 resource "kubernetes_deployment_v1" "transaction_service" {
   metadata {
     name      = "transaction-service"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "transaction-service"
     }
@@ -362,7 +362,7 @@ resource "kubernetes_deployment_v1" "transaction_service" {
 resource "kubernetes_deployment_v1" "activity_service" {
   metadata {
     name      = "activity-service"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "activity-service"
     }
@@ -431,7 +431,7 @@ resource "kubernetes_deployment_v1" "activity_service" {
 resource "kubernetes_deployment_v1" "bank_frontend" {
   metadata {
     name      = "bank-frontend"
-    namespace = kubernetes_namespace_v1.banking.metadata[0].name
+    namespace = "banking"
     labels = {
       app = "bank-frontend"
     }
