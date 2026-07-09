@@ -44,9 +44,3 @@ provider "helm" {
     }
   }
 }
-
-resource "kubernetes_namespace_v1" "banking" {
-  metadata {
-    name = "banking"
-  }
-}
