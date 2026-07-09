@@ -2,7 +2,7 @@ name: Destroy Entire Infra
 
 on:
   push:
-    branches: ["main", "feat-dev", "master"]
+    branches: [ "main", "feat-dev", "master" ]
   workflow_dispatch:
 
 
@@ -46,6 +46,12 @@ jobs:
         vpc_name              = "${{ secrets.VPC_NAME }}"
         key_name              = "${{ secrets.KEY_NAME }}"
         EOF
+
+    - name: Download AWS Load Balancer Controller IAM Policy
+      working-directory: ./terraform
+      shell: bash
+      run: |
+        curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
     - name: Terraform Init
       working-directory: ./terraform
@@ -91,6 +97,9 @@ jobs:
         terraform state rm kubernetes_ingress_v1.bank_frontend || true
         terraform state rm helm_release.ebs_csi_driver || true
         terraform state rm helm_release.ingress_nginx || true
+        terraform state rm aws_iam_policy.aws_load_balancer_controller || true
+        terraform state rm aws_iam_role.aws_load_balancer_controller || true
+        terraform state rm helm_release.aws_load_balancer_controller || true
 
     - name: Terraform Destroy
       working-directory: ./terraform
