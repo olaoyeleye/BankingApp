@@ -112,7 +112,7 @@ jobs:
       - name: Terraform Init
         working-directory: ./terraform
         run: |
-          terraform init
+          terraform init --reconfigure
 
       - name: Terraform Apply Specifics
         if: steps.set-action.outputs.action == 'destroy'
