@@ -107,7 +107,7 @@ resource "aws_eks_cluster" "main" {
 
 resource "aws_eks_access_entry" "ci_admin" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = aws_caller_identity.current.arn
+  principal_arn = data.aws_caller_identity.current.arn
   type          = "STANDARD"
 }
 
