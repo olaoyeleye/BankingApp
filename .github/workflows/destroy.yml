@@ -92,6 +92,15 @@ jobs:
         TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
       shell: bash
       run: |
+        terraform state rm 'kubernetes_deployment.kafka'
+        terraform state rm 'kubernetes_deployment.activity_service'
+        terraform state rm 'kubernetes_deployment.user_service'
+        terraform state rm 'kubernetes_config_map.banking_config'
+        terraform state rm 'kubernetes_secret.banking_secrets'
+        terraform state rm 'kubernetes_deployment.transaction_service'
+        terraform state rm 'kubernetes_deployment.bank_frontend'
+        terraform state rm 'kubernetes_deployment.redis'
+        terraform state rm 'kubernetes_config_map.postgres_init_sql'
         terraform state rm aws_eks_node_group.main || true
         terraform state rm aws_eks_cluster.main || true
         terraform state rm kubernetes_namespace_v1.banking || true
