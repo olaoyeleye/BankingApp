@@ -91,6 +91,7 @@ jobs:
         TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
       shell: bash
       run: |
+        terraform state rm aws_eks_node_group.main || true
         terraform state rm kubernetes_namespace_v1.banking || true
         terraform state rm kubernetes_namespace_v1.ingress_nginx || true
         terraform state rm kubernetes_service_v1.bank_frontend || true
