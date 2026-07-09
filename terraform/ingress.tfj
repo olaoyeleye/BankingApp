@@ -1,0 +1,1 @@
+# Kubernetes ingress resources are managed by Ansible, not Terraform.

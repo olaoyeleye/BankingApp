@@ -5,9 +5,9 @@ resource "aws_subnet" "public_kunle_subnet_a" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                      = "${var.vpc_name}-public-a"
+    Name                                            = "${var.vpc_name}-public-a"
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
-    "kubernetes.io/role/elb"                  = "1"
+    "kubernetes.io/role/elb"                        = "1"
   }
 }
 
@@ -18,8 +18,8 @@ resource "aws_subnet" "public_kunle_subnet_b" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                      = "${var.vpc_name}-public-b"
+    Name                                            = "${var.vpc_name}-public-b"
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
-    "kubernetes.io/role/elb"                  = "1"
+    "kubernetes.io/role/elb"                        = "1"
   }
 }

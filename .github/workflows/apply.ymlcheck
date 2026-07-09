@@ -1,0 +1,211 @@
+name: Deploy Entire Infra
+
+on:
+  push:
+    branches: ["main", "feat-dev", "master"]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Terraform action to run"
+        required: true
+        default: "aply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Terraform Action
+        id: set-action
+        shell: bash
+        run: |
+          ACTION="${{ github.event.inputs.terraform_action }}"
+          if [ -z "$ACTION" ]; then
+            ACTION="apply"
+          fi
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Login to Amazon ECR
+        if: steps.set-action.outputs.action != 'destroy'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag and Push image to ECR (User)
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-user-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./user-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Transaction)
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-transaction-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./transaction-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Activity)
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-activity-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./activity-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Postgres Init)
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-postgres
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./db-init
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push frontend image to ECR
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-frontend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Create terraform.tfvars
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          cat > terraform.tfvars <<EOF
+          region                    = "${{ secrets.AWS_REGION }}"
+          vpc_name                  = "${{ secrets.VPC_NAME }}"
+          frontend_image            = "${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
+          user_service_image        = "${{ steps.login-ecr.outputs.registry }}/bank-app-user-service:${{ github.sha }}"
+          transaction_service_image = "${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }}"
+          activity_service_image    = "${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
+          postgres_image            = "${{ steps.login-ecr.outputs.registry }}/bank-app-postgres:${{ github.sha }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        shell: bash
+        run: terraform init -reconfigure
+
+      - name: Download AWS Load Balancer Controller IAM Policy
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+      - name: Terraform Plan
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Plan Destroy
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -destroy -out=tfplan
+
+      - name: Terraform Destroy
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform destroy -auto-approve 
+
+      - name: Install kubectl
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Get Ingress URL
+        if: steps.set-action.outputs.action != 'destroy'
+        id: get-ingress-url
+        shell: bash
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.VPC_NAME }}-cluster" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          echo "Waiting for Ingress ALB address..."
+          INGRESS_ALB=""
+          for i in {1..30}; do
+            INGRESS_ALB=$(kubectl get ingress banking-ingress -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            if [ -n "$INGRESS_ALB" ]; then
+              break
+            fi
+            echo "Attempt $i: Ingress ALB not assigned yet, waiting 20s..."
+            sleep 20
+          done
+
+          echo "alb_url=$INGRESS_ALB" >> "$GITHUB_OUTPUT"
+          echo "Ingress ALB URL: $INGRESS_ALB"
+
+      - name: Show Ingress URL
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          echo "Application URL: http://${{ steps.get-ingress-url.outputs.alb_url }}"

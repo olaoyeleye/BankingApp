@@ -5,7 +5,7 @@ resource "aws_vpc" "vpc" {
   instance_tenancy     = "default"
 
   tags = {
-    Name                                      = "${var.vpc_name}-vpc"
+    Name                                            = "${var.vpc_name}-vpc"
     "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
   }
 }
