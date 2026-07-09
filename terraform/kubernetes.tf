@@ -107,7 +107,7 @@ resource "aws_eks_cluster" "main" {
 
 resource "aws_eks_access_entry" "ci_admin" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = data.aws_caller_identity.current.arn
+  principal_arn = aws_caller_identity.current.arn
   type          = "STANDARD"
 }
 
@@ -125,14 +125,14 @@ resource "aws_eks_access_policy_association" "ci_admin_policy" {
 
 resource "aws_eks_access_entry" "node_role" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn = data.aws_iam_role.eks_nodes.arn
+  principal_arn =  aws_iam_role.eks_nodes.arn
   type          = "EC2_LINUX"
 }
 
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
-  node_role_arn   = data.aws_iam_role.eks_nodes.arn
+  node_role_arn   =  aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
   instance_types  = [var.instance_type]
 
