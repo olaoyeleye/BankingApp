@@ -23,23 +23,23 @@
 #  ]
 #}
 
-#resource "helm_release" "ingress_nginx" {
-#  name             = "ingress-nginx"
-#  repository       = "https://kubernetes.github.io/ingress-nginx"
-#  chart            = "ingress-nginx"
-#  namespace        = "ingress-nginx"
-#  create_namespace = true
-#  timeout          = 900
+resource "helm_release" "ingress_nginx" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  namespace        = "ingress-nginx"
+  create_namespace = true
+  timeout          = 900
 
-#  values = [yamlencode({
-#    controller = {
-#      service = {
-#        type = "NodePort"
-#      }
-#    }
-#  })]
+  values = [yamlencode({
+    controller = {
+      service = {
+        type = "NodePort"
+      }
+    }
+  })]
 
-#  depends_on = [
-#    aws_eks_node_group.main
-#  ]
-#}
+  depends_on = [
+    aws_eks_node_group.main
+  ]
+}
