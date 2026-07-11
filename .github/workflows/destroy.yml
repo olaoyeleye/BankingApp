@@ -219,5 +219,6 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         shell: bash
         run: |
+          terraform state list
           terraform state rm aws_security_group.public_kunle_sg || true
           terraform state rm eks-cluster-sg-tai-key-cluster* || true
