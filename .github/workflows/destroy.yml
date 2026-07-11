@@ -38,12 +38,12 @@ jobs:
         shell: bash
         run: |
           cat > terraform.tfvars <<EOF
-          region             = "${{ secrets.AWS_REGION }}"
-          ami                = "${{ secrets.AMI_ID }}"
-          instance_type      = "${{ secrets.INSTANCE_TYPE }}"
+          region              = "${{ secrets.AWS_REGION }}"
+          ami                 = "${{ secrets.AMI_ID }}"
+          instance_type       = "${{ secrets.INSTANCE_TYPE }}"
           instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
-          vpc_name           = "${{ secrets.VPC_NAME }}"
-          key_name           = "${{ secrets.KEY_NAME }}"
+          vpc_name            = "${{ secrets.VPC_NAME }}"
+          key_name            = "${{ secrets.KEY_NAME }}"
           EOF
 
       - name: Download AWS Load Balancer Controller IAM Policy
@@ -69,12 +69,12 @@ jobs:
       - name: Update kubeconfig for EKS
         shell: bash
         run: |
-          aws eks update-kubeconfig --name "${{ secrets.EKS_CLUSTER_NAME }}" --region "${{ secrets.AWS_REGION }}" || true
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}" || true
 
       - name: Remove ALB, ingress, and Kubernetes resources
         shell: bash
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
           kubectl delete ingress --all -A --ignore-not-found || true
           kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
@@ -83,6 +83,7 @@ jobs:
           helm uninstall aws-ebs-csi-driver -n kube-system --ignore-not-found || true
           helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found || true
           sleep 60
+
       - name: Delete EKS node groups
         shell: bash
         run: |
@@ -134,15 +135,14 @@ jobs:
           aws eks delete-addon \
             --cluster-name "${{ secrets.EKS_CLUSTER_NAME }}" \
             --addon-name aws-ebs-csi-driver \
-            --region "${{ secrets.AWS_REGION }}" || echo "Addon not found, moving on..."
+            --region "${{ secrets.AWS_REGION }}" || true
 
           aws eks wait addon-deleted \
             --cluster-name "${{ secrets.EKS_CLUSTER_NAME }}" \
             --addon-name aws-ebs-csi-driver \
-            --region "${{ secrets.AWS_REGION }}" || echo "Done waiting."
+            --region "${{ secrets.AWS_REGION }}" || true
 
-
-      - name: Delete matching security groups
+      - name: Delete remaining security groups
         shell: bash
         run: |
           set -euo pipefail
@@ -158,16 +158,38 @@ jobs:
             exit 0
           fi
 
-          aws ec2 describe-security-groups \
-            --region "$REGION" \
-            --filters "Name=vpc-id,Values=$VPC_ID" \
-            --query 'SecurityGroups[].{Id:GroupId,Name:GroupName}' \
-            --output text | while read -r SG_ID SG_NAME; do
-              if [[ "$SG_NAME" =~ ^eks-cluster-sg-tai-key-cluster-[0-9]+$ || "$SG_NAME" == "tai-key-database-sg" ]]; then
-                echo "Deleting security group: $SG_NAME ($SG_ID)"
-                aws ec2 delete-security-group --region "$REGION" --group-id "$SG_ID" || true
-              fi
-            done
+          for SG_NAME in "eks-cluster-sg-tai-key-cluster-1578759205" "tai-key-database-sg"; do
+            SG_ID=$(aws ec2 describe-security-groups \
+              --region "$REGION" \
+              --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values="$SG_NAME" \
+              --query 'SecurityGroups[0].GroupId' \
+              --output text 2>/dev/null || true)
+
+            if [ -z "$SG_ID" ] || [ "$SG_ID" = "None" ]; then
+              echo "Security group $SG_NAME not found, skipping"
+              continue
+            fi
+
+            ENIS=$(aws ec2 describe-network-interfaces \
+              --region "$REGION" \
+              --filters Name=group-id,Values="$SG_ID" \
+              --query 'NetworkInterfaces[].NetworkInterfaceId' \
+              --output text 2>/dev/null || true)
+
+            if [ -n "${ENIS// /}" ]; then
+              echo "Found ENIs attached to $SG_NAME ($SG_ID): $ENIS"
+              for ENI in $ENIS; do
+                aws ec2 delete-network-interface \
+                  --region "$REGION" \
+                  --network-interface-id "$ENI" || true
+              done
+            fi
+
+            echo "Deleting security group $SG_NAME ($SG_ID)"
+            aws ec2 delete-security-group \
+              --region "$REGION" \
+              --group-id "$SG_ID" || true
+          done
 
       - name: Remove matching security groups from state
         working-directory: ./terraform
@@ -260,6 +282,13 @@ jobs:
             aws ec2 delete-security-group --region "$REGION" --group-id "$SG_ID" || true
           done
 
+      - name: Remove state entries for manually deleted resources
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          terraform state list
+          terraform state rm aws_security_group.public_kunle_sg || true
+          
       - name: Remove state entries for manually deleted resources
         working-directory: ./terraform
         env:
