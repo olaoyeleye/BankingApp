@@ -141,6 +141,47 @@ jobs:
             --addon-name aws-ebs-csi-driver \
             --region "${{ secrets.AWS_REGION }}" || echo "Done waiting."
 
+
+      - name: Delete matching security groups
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REGION="${{ secrets.AWS_REGION }}"
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=${{ secrets.VPC_NAME }}" \
+            --query 'Vpcs[0].VpcId' \
+            --output text 2>/dev/null || true)
+
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
+            echo "VPC not found, skipping security group deletion"
+            exit 0
+          fi
+
+          aws ec2 describe-security-groups \
+            --region "$REGION" \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query 'SecurityGroups[].{Id:GroupId,Name:GroupName}' \
+            --output text | while read -r SG_ID SG_NAME; do
+              if [[ "$SG_NAME" =~ ^eks-cluster-sg-tai-key-cluster-[0-9]+$ || "$SG_NAME" == "tai-key-database-sg" ]]; then
+                echo "Deleting security group: $SG_NAME ($SG_ID)"
+                aws ec2 delete-security-group --region "$REGION" --group-id "$SG_ID" || true
+              fi
+            done
+
+      - name: Remove matching security groups from state
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          terraform state list | while read -r ADDR; do
+            if [[ "$ADDR" =~ aws_security_group\. ]] && [[ "$ADDR" =~ (eks_cluster|database|tai_key) ]]; then
+              echo "Removing from state: $ADDR"
+              terraform state rm "$ADDR" || true
+            fi
+          done
+
       - name: Remove cluster from Terraform state
         working-directory: ./terraform
         shell: bash
@@ -228,3 +269,17 @@ jobs:
           terraform state list
           terraform state rm aws_security_group.public_kunle_sg || true
           terraform state rm eks-cluster-sg-tai-key-cluster* || true
+
+
+      - name: Terraform Plan Destroy
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -destroy -out=destroy.tfplan
+
+      - name: Terraform Destroy
+        working-directory: ./terraform
+        shell: bash
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform apply -auto-approve destroy.tfplan
+
