@@ -115,6 +115,33 @@ jobs:
         run: |
           terraform init --reconfigure
 
+
+      - name: Import IAM role and policy if they already exist
+        working-directory: ./terraform
+        shell: bash
+        env:
+          ROLE_NAME: tai-key-eks-cluster-role
+          POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
+        run: |
+          set -euo pipefail
+
+          ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
+          POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${POLICY_NAME}"
+
+          if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+            if ! terraform state list | grep -qx "$ROLE_ADDR"; then
+              terraform import "$ROLE_ADDR" "$ROLE_NAME"
+            fi
+          fi
+
+          if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+            if ! terraform state list | grep -qx "$POLICY_ADDR"; then
+              terraform import "$POLICY_ADDR" "$POLICY_ARN"
+            fi
+          fi
+
       - name: Terraform Apply Specifics.
         if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
