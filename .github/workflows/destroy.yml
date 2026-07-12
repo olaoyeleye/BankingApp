@@ -92,42 +92,28 @@ jobs:
           CLUSTER_NAME="${{ secrets.EKS_CLUSTER_NAME }}"
           REGION="${{ secrets.AWS_REGION }}"
 
-          if ! aws eks describe-cluster \
-            --name "$CLUSTER_NAME" \
-            --region "$REGION" >/dev/null 2>&1; then
-            echo "Cluster $CLUSTER_NAME not found in $REGION; skipping node group deletion"
-            exit 0
-          fi
-
-          NODEGROUPS=$(aws eks list-nodegroups \
-            --cluster-name "$CLUSTER_NAME" \
-            --region "$REGION" \
-            --query 'nodegroups[].nodegroupName' \
-            --output text)
-
-          if [ -z "${NODEGROUPS// /}" ]; then
-            echo "No managed node groups found"
-            exit 0
-          fi
-
-          for NG in $NODEGROUPS; do
-            echo "Deleting node group: $NG"
-            aws eks delete-nodegroup \
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            NODEGROUPS=$(aws eks list-nodegroups \
               --cluster-name "$CLUSTER_NAME" \
-              --nodegroup-name "$NG" \
-              --region "$REGION" || true
+              --region "$REGION" \
+              --query 'nodegroups[].nodegroupName' \
+              --output text)
 
-            aws eks wait nodegroup-deleted \
-              --cluster-name "$CLUSTER_NAME" \
-              --nodegroup-name "$NG" \
-              --region "$REGION" || true
-          done
+            if [ -n "${NODEGROUPS// /}" ]; then
+              for NG in $NODEGROUPS; do
+                echo "Deleting node group: $NG"
+                aws eks delete-nodegroup \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
 
-      - name: Remove node groups from Terraform state
-        working-directory: ./terraform
-        shell: bash
-        run: |
-          terraform state rm aws_eks_node_group.main || true
+                aws eks wait nodegroup-deleted \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
+              done
+            fi
+          fi
 
       - name: Delete EKS add-ons
         shell: bash
@@ -142,7 +128,7 @@ jobs:
             --addon-name aws-ebs-csi-driver \
             --region "${{ secrets.AWS_REGION }}" || true
 
-      - name: Delete remaining security groups
+      - name: Delete leftover security groups
         shell: bash
         run: |
           set -euo pipefail
@@ -185,61 +171,18 @@ jobs:
               done
             fi
 
-            echo "Deleting security group $SG_NAME ($SG_ID)"
             aws ec2 delete-security-group \
               --region "$REGION" \
               --group-id "$SG_ID" || true
           done
 
-      - name: Remove matching security groups from state
+      - name: Remove Terraform state for manually deleted resources
         working-directory: ./terraform
         shell: bash
         run: |
           set -euo pipefail
-
-          terraform state list | while read -r ADDR; do
-            if [[ "$ADDR" =~ aws_security_group\. ]] && [[ "$ADDR" =~ (eks_cluster|database|tai_key) ]]; then
-              echo "Removing from state: $ADDR"
-              terraform state rm "$ADDR" || true
-            fi
-          done
-
-
-      - name: Delete EKS node groups
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          CLUSTER_NAME="${{ secrets.EKS_CLUSTER_NAME }}"
-          REGION="${{ secrets.AWS_REGION }}"
-
-          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
-            NODEGROUPS=$(aws eks list-nodegroups \
-              --cluster-name "$CLUSTER_NAME" \
-              --region "$REGION" \
-              --query 'nodegroups[].nodegroupName' \
-              --output text)
-
-            if [ -n "${NODEGROUPS// /}" ]; then
-              for NG in $NODEGROUPS; do
-                echo "Deleting node group: $NG"
-                aws eks delete-nodegroup \
-                  --cluster-name "$CLUSTER_NAME" \
-                  --nodegroup-name "$NG" \
-                  --region "$REGION" || true
-
-                aws eks wait nodegroup-deleted \
-                  --cluster-name "$CLUSTER_NAME" \
-                  --nodegroup-name "$NG" \
-                  --region "$REGION" || true
-              done
-            fi
-          fi
-
-      - name: Remove cluster from Terraform state
-        working-directory: ./terraform
-        shell: bash
-        run: |
+          terraform state rm aws_security_group.public_kunle_sg || true
+          terraform state rm aws_eks_node_group.main || true
           terraform state rm aws_eks_cluster.main || true
           terraform state rm kubernetes_namespace_v1.banking || true
           terraform state rm kubernetes_namespace_v1.ingress_nginx || true
@@ -250,87 +193,6 @@ jobs:
           terraform state rm aws_iam_policy.aws_load_balancer_controller || true
           terraform state rm aws_iam_role.aws_load_balancer_controller || true
           terraform state rm helm_release.aws_load_balancer_controller || true
-
-      - name: Delete EKS cluster
-        shell: bash
-        run: |
-          set -euo pipefail
-          aws eks delete-cluster \
-            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
-            --region "${{ secrets.AWS_REGION }}" || true
-
-      - name: Wait for cluster deletion
-        shell: bash
-        run: |
-          set -euo pipefail
-          until ! aws eks describe-cluster \
-            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
-            --region "${{ secrets.AWS_REGION }}" >/dev/null 2>&1; do
-            echo "Cluster still deleting..."
-            sleep 30
-          done
-
-      - name: Cleanup EKS security groups in AWS
-        shell: bash
-        env:
-          AWS_REGION: eu-west-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          set -euo pipefail
-
-          REGION="${AWS_REGION:-eu-west-1}"
-          SG_NAMES=("tai-key-nodes-sg" "eks-cluster-sg-tai-key-cluster")
-
-          for SG_NAME in "${SG_NAMES[@]}"; do
-            SG_ID=$(aws ec2 describe-security-groups \
-              --region "$REGION" \
-              --filters Name=group-name,Values="$SG_NAME" \
-              --query 'SecurityGroups[0].GroupId' \
-              --output text 2>/dev/null || true)
-
-            if [ -z "$SG_ID" ] || [ "$SG_ID" = "None" ]; then
-              echo "Security group $SG_NAME not found, skipping"
-              continue
-            fi
-
-            echo "Checking dependencies for $SG_NAME ($SG_ID)"
-
-            ENIS=$(aws ec2 describe-network-interfaces \
-              --region "$REGION" \
-              --filters Name=group-id,Values="$SG_ID" \
-              --query 'NetworkInterfaces[].NetworkInterfaceId' \
-              --output text || true)
-
-            if [ -n "${ENIS// /}" ]; then
-              echo "Found ENIs attached to $SG_ID: $ENIS"
-              for ENI in $ENIS; do
-                echo "Deleting ENI $ENI"
-                aws ec2 delete-network-interface --region "$REGION" --network-interface-id "$ENI" || true
-              done
-            fi
-
-            echo "Deleting security group $SG_NAME ($SG_ID)"
-            aws ec2 delete-security-group --region "$REGION" --group-id "$SG_ID" || true
-          done
-
-      - name: Remove state entries for manually deleted resources
-        working-directory: ./terraform
-        shell: bash
-        run: |
-          terraform state list
-          terraform state rm aws_security_group.public_kunle_sg || true
-          
-      - name: Remove state entries for manually deleted resources
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        shell: bash
-        run: |
-          terraform state list
-          terraform state rm aws_security_group.public_kunle_sg || true
-          terraform state rm eks-cluster-sg-tai-key-cluster* || true
-
 
       - name: Terraform Plan Destroy
         working-directory: ./terraform
@@ -343,4 +205,3 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform apply -auto-approve destroy.tfplan
-
