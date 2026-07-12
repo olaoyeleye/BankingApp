@@ -59,3 +59,5 @@ variable "instance-name-nginx" {
   type    = string
   default = "nginx-node"
 }
+
+variable "AWS_ACCOUNT_ID"{}
