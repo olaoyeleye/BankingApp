@@ -179,6 +179,14 @@ jobs:
               terraform import "$POLICY_ADDR" "$POLICY_ARN"
             fi
           fi
+
+          
+      - name: Terraform Plan
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -out=tfplan
+        
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
