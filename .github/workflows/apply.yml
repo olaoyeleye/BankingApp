@@ -153,36 +153,10 @@ jobs:
             -auto-approve
 
 
-      - name: Import existing IAM roles
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          helm uninstall ingress-nginx -n ingress-nginx || true
-          terraform state rm helm_release.ingress_nginx || true
-          #terraform state rm aws_eks_cluster.main || true
-          #terraform state rm aws_iam_role.eks_cluster || true 
-          #terraform state rm aws_eks_node_group.main || true
-          #terraform import aws_eks_cluster.main kunle-vpc-cluster || true
-          #terraform import aws_iam_role.eks_cluster kunle-vpc-eks-cluster-role || true
-          #terraform import aws_iam_role.eks_nodes kunle-vpc-eks-node-role || true
-          ls -ltar
-
-
-      - name: Terraform Plan 
-        if: steps.set-action.outputs.action != 'destroy'
-        working-directory: ./terraform
-        env:
-          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          terraform state rm helm_release.ingress_nginx || true
-          terraform plan -out=tfplan 
-
       - name: Import existing IAM role and policy
         working-directory: ./terraform
         shell: bash
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
           ROLE_NAME: tai-key-eks-cluster-role
           POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
         run: |
@@ -190,6 +164,8 @@ jobs:
 
           ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
           POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
+
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${POLICY_NAME}"
 
           if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
@@ -203,8 +179,6 @@ jobs:
               terraform import "$POLICY_ADDR" "$POLICY_ARN"
             fi
           fi
-
-
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
