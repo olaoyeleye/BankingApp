@@ -114,7 +114,13 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform init --reconfigure
-
+         
+      - name: Terraform Plan
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -out=tfplan
+        
       - name: Terraform Apply Specifics.
         if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
@@ -180,13 +186,8 @@ jobs:
             fi
           fi
 
-          
-      - name: Terraform Plan
-        if: steps.set-action.outputs.action == 'destroy'
-        working-directory: ./terraform
-        shell: bash
-        run: terraform plan -out=tfplan
-        
+ 
+
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
