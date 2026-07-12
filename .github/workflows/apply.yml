@@ -142,6 +142,37 @@ jobs:
             fi
           fi
 
+
+      - name: Delete EKS node groups first
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLUSTER_NAME="${{ secrets.EKS_CLUSTER_NAME }}"
+          REGION="${{ secrets.AWS_REGION }}"
+
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            NODEGROUPS=$(aws eks list-nodegroups \
+              --cluster-name "$CLUSTER_NAME" \
+              --region "$REGION" \
+              --query 'nodegroups[].nodegroupName' \
+              --output text)
+
+            if [ -n "${NODEGROUPS// /}" ]; then
+              for NG in $NODEGROUPS; do
+                echo "Deleting node group: $NG"
+                aws eks delete-nodegroup \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
+
+                aws eks wait nodegroup-deleted \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
+              done
+            fi
+          fi
       - name: Terraform Apply Specifics.
         if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
