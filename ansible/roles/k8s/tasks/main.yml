@@ -4,6 +4,7 @@
     name:
       - unzip
       - git
+      - curl
     state: present
 
 - name: Install AWS CLI v2
@@ -35,6 +36,23 @@
 - name: Print kubectl version
   debug:
     msg: "{{ kubectl_out.stdout }}"
+
+- name: Install Helm
+  shell: |
+    curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod 700 /tmp/get_helm.sh
+    /tmp/get_helm.sh
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Verify helm installed
+  command: helm version
+  register: helm_out
+  changed_when: false
+
+- name: Print helm version
+  debug:
+    msg: "{{ helm_out.stdout }}"
 
 - name: Configure kubeconfig for EKS
   shell: |
@@ -107,10 +125,38 @@
     grep "image:" /home/ec2-user/k8s/postgres.yml
   become_user: ec2-user
   register: image_check
+  changed_when: false
 
 - name: Print image values
   debug:
     msg: "{{ image_check.stdout }}"
+
+- name: Add ingress-nginx Helm repo
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
+    repo_url: https://kubernetes.github.io/ingress-nginx
+  environment:
+    KUBECONFIG: /home/ec2-user/.kube/config
+    HOME: /home/ec2-user
+
+- name: Install ingress-nginx controller
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: ingress-nginx
+    create_namespace: true
+    update_repo_cache: true
+    wait: true
+    timeout: 900
+    state: present
+  become: yes
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
 
 # ---- STEP 1: Fix StorageClass FIRST ----
 - name: Fix StorageClass
@@ -132,11 +178,7 @@
   debug:
     msg: "{{ sc_fix.stdout }}"
 
-
-
-
 # ---- STEP 2: Clean up stuck namespace ----
-#  Simple synchronous wait instead
 - name: Clean up old banking namespace
   shell: kubectl delete namespace banking --ignore-not-found=true
   become_user: ec2-user
@@ -177,7 +219,7 @@
     KUBECONFIG: /home/ec2-user/.kube/config
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}" 
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: infra_result
 
 - name: Print infra apply output
@@ -196,6 +238,7 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: ebs_check
+  changed_when: false
 
 - name: Print EBS CSI status
   debug:
@@ -206,13 +249,10 @@
   shell: |
     echo "=== PVC Describe ==="
     kubectl describe pvc postgres-pvc -n banking
-
     echo "=== PVC ==="
     kubectl get pvc -n banking
-
     echo "=== Pod status ==="
     kubectl get pods -n banking
-
     echo "=== Postgres events ==="
     kubectl describe pod -l app=postgres -n banking | grep -A10 "Events:"
   become_user: ec2-user
@@ -223,6 +263,7 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: pvc_status
+  ignore_errors: true
 
 - name: Print PVC status
   debug:
@@ -268,9 +309,6 @@
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   ignore_errors: true
 
-
-
-
 - name: Wait for ingress
   shell: |
     kubectl wait --for=condition=ready pod \
@@ -284,7 +322,6 @@
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   ignore_errors: true
 
-
 - name: Final pod status
   shell: kubectl get pods -n banking
   become_user: ec2-user
@@ -295,6 +332,7 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   register: pod_status
+  changed_when: false
 
 - name: Print pod status
   debug:
@@ -350,4 +388,3 @@
 - name: Print service URLs
   debug:
     msg: "{{ service_urls.stdout }}"
-
