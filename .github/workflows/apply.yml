@@ -61,6 +61,7 @@ jobs:
           instance-name-nginx   = "${{ secrets.INSTANCE_NAME_NGINX }}"
           vpc_name              = "${{ secrets.VPC_NAME }}"
           key_name              = "${{ secrets.KEY_NAME }}"
+          AWS_ACCOUNT_ID        = "${{ secrets.AWS_ACCOUNT_ID }}"
           EOF
 
       - name: Download AWS Load Balancer Controller IAM Policy
