@@ -60,4 +60,4 @@ variable "instance-name-nginx" {
   default = "nginx-node"
 }
 
-variable "AWS_ACCOUNT_ID"{}
+#variable "AWS_ACCOUNT_ID"{}
