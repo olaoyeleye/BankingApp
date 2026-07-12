@@ -177,8 +177,6 @@ jobs:
           terraform state rm helm_release.ingress_nginx || true
           terraform plan -out=tfplan 
 
-
-
       - name: Import existing IAM role and policy
         working-directory: ./terraform
         shell: bash
