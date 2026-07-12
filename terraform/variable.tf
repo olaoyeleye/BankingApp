@@ -61,3 +61,4 @@ variable "instance-name-nginx" {
 }
 
 #variable "AWS_ACCOUNT_ID"{}
+
