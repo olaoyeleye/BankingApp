@@ -75,7 +75,7 @@ jobs:
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
-        run: | 
+        run: |
           echo "Checking if EKS cluster exists..."
           CLUSTER_EXISTS=$(aws eks list-clusters \
             --region "${{ secrets.AWS_REGION }}" \
@@ -110,13 +110,14 @@ jobs:
               echo "OIDC Provider is already tracked in state."
             fi
           fi
+
       - name: Terraform Init
         working-directory: ./terraform
         run: |
           terraform init --reconfigure
 
-
       - name: Import IAM role and policy if they already exist
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
         env:
@@ -142,7 +143,8 @@ jobs:
             fi
           fi
 
-
+      # Runs for BOTH apply and destroy: makes sure no stray/orphaned node groups
+      # (e.g. from a previous failed run) block cluster operations.
       - name: Delete EKS node groups first
         shell: bash
         run: |
@@ -155,7 +157,7 @@ jobs:
             NODEGROUPS=$(aws eks list-nodegroups \
               --cluster-name "$CLUSTER_NAME" \
               --region "$REGION" \
-              --query 'nodegroups[].nodegroupName' \
+              --query 'nodegroups[]' \
               --output text)
 
             if [ -n "${NODEGROUPS// /}" ]; then
@@ -173,24 +175,26 @@ jobs:
               done
             fi
           fi
+
       - name: Terraform Apply Specifics.
         if: steps.set-action.outputs.action == 'destroy'
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |  
-        
+        run: |
           helm uninstall ingress-nginx -n ingress-nginx || true
           terraform state rm helm_release.ingress_nginx || true
           terraform state rm kubernetes_namespace_v1.banking || true
           terraform state rm kubernetes_namespace_v1.ingress_nginx || true
           terraform state rm kubernetes_service_v1.bank_frontend || true
           terraform state rm helm_release.ebs_csi_driver || true
-          terraform state rm kubernetes_namespace_v1.ingress_nginx || true 
-          terraform state rm kubernetes_namespace_v1.banking || true 
-          terraform state rm kubernetes_service_v1.bank_frontend || true 
-          terraform state rm helm_release.ebs_csi_driver || true 
-          terraform state rm helm_release.ebs_csi_driver || true 
+
+          # Node groups were already deleted (via AWS CLI) in the previous step.
+          # Remove them from state too so Terraform doesn't try to recreate/reconcile
+          # them via the -target apply below, which would put them back and block
+          # the cluster deletion with ResourceInUseException.
+          terraform state rm aws_eks_node_group.main || true
+
           terraform apply \
             -target=aws_vpc.vpc \
             -target=aws_subnet.public-kunle-subnet \
@@ -207,12 +211,11 @@ jobs:
             -target=aws_iam_role_policy_attachment.eks_cni_policy \
             -target=aws_iam_role_policy_attachment.eks_registry_policy \
             -target=aws_eks_cluster.main \
-            -target=aws_eks_node_group.main \
             -target=aws_iam_openid_connect_provider.eks \
             -auto-approve
 
-
       - name: Import existing IAM role and policy
+        if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
         shell: bash
         env:
@@ -220,8 +223,8 @@ jobs:
           POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
         run: |
           set -euo pipefail
-          terraform import aws_iam_role.aws_load_balancer_controller tai-key-vpc-aws-load-balancer-controller-role || true
-          terraform import aws_iam_policy.aws_load_balancer_controller arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:policy/tai-key-AWSLoadBalancerControllerIAMPolicy || true   
+          terraform import aws_iam_role.aws_load_balancer_controller ${{ secrets.VPC_NAME }}-aws-load-balancer-controller-role || true
+          terraform import aws_iam_policy.aws_load_balancer_controller arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:policy/tai-key-AWSLoadBalancerControllerIAMPolicy || true
 
           ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
           POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
@@ -241,12 +244,11 @@ jobs:
             fi
           fi
 
-          
-      - name: Terraform Plan 
+      - name: Terraform Plan
         working-directory: ./terraform
         shell: bash
         run: terraform plan -out=tfplan
-        
+
       - name: Terraform Apply
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./terraform
@@ -259,7 +261,6 @@ jobs:
           curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
-
 
       - name: Login to Amazon ECR
         if: steps.set-action.outputs.action != 'destroy'
@@ -332,14 +333,6 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install ansible boto3 botocore
-
-      - name: Install kubectl
-        if: steps.set-action.outputs.action != 'destroy'
-        shell: bash
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
 
       - name: Install eksctl
         if: steps.set-action.outputs.action != 'destroy'
@@ -485,13 +478,8 @@ jobs:
             exit 1
           fi
 
-          # sed -i "s|const USER_API = \"[^\"]*\";|const USER_API = \"http://${INGRESS_HOST}\";|" src/App.jsx
-          # sed -i "s|const TX_API = \"[^\"]*\";|const TX_API = \"http://${INGRESS_HOST}/transactions\";|" src/App.jsx
-          # sed -i "s|const ACTIVITY_API = \"[^\"]*\";|const ACTIVITY_API = \"http://${INGRESS_HOST}/activities\";|" src/App.jsx
-
           sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx
           cat src/App.jsx | head -n 10
-          
 
       - name: Build, Tag and Push frontend image to ECR
         if: steps.set-action.outputs.action != 'destroy'
@@ -557,7 +545,3 @@ jobs:
             -e "ssh -i /home/runner/.ssh/ansible_key.pem -o StrictHostKeyChecking=no" \
             ${{ github.workspace }}/ \
             ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }}:/home/ec2-user/manifest-repo/
-
-
-
-
