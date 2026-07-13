@@ -161,6 +161,27 @@
     mode: "0755"
 
 
+# - name: Copy k8s manifests to EC2
+#   ansible.builtin.copy:
+#     src: "{{ playbook_dir }}/../k8s/{{ item }}"
+#     dest: "/home/ec2-user/k8s/{{ item }}"
+#     owner: ec2-user
+#     group: ec2-user
+#     mode: "0644"
+#   loop:
+#     - namespace.yml
+#     - secret.yml
+#     - configmap.yml
+#     - storageclass.yml
+#     - postgres.yml
+#     - redis.yml
+#     - kafka.yml
+#     - user-service.yml
+#     - transaction-service.yml
+#     - activity-service.yml
+#     - ingress.yml
+
+
 - name: Copy k8s manifests to EC2
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../k8s/{{ item }}"
@@ -181,6 +202,7 @@
     - activity-service.yml
     - ingress.yml
 
+    
 - name: Replace app images
   ansible.builtin.replace:
     path: "/home/ec2-user/k8s/{{ item.file }}"
