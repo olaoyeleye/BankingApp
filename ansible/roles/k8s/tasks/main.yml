@@ -135,7 +135,7 @@
     create_namespace: true
     update_repo_cache: true
     wait: true
-    timeout: 15m
+    timeout: 5m
     state: present
   become: yes
   become_user: ec2-user
