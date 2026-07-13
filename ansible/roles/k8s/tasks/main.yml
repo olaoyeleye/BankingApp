@@ -162,7 +162,7 @@
 
 - name: Copy k8s manifests to EC2
   ansible.builtin.copy:
-    src: "{{ item }}"
+    src: "k8s/{{ item }}"
     dest: "/home/ec2-user/k8s/{{ item | basename }}"
     owner: ec2-user
     group: ec2-user
