@@ -160,9 +160,10 @@
     group: ec2-user
     mode: "0755"
 
+
 - name: Copy k8s manifests to EC2
   ansible.builtin.copy:
-    src: "k8s/{{ item }}"
+    src: "{{ playbook_dir }}/../k8s/"   #src: "k8s/{{ item }}" 
     dest: "/home/ec2-user/k8s/{{ item | basename }}"
     owner: ec2-user
     group: ec2-user
