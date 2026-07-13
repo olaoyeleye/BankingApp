@@ -163,23 +163,23 @@
 
 - name: Copy k8s manifests to EC2
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../k8s/{{ item }}"  #src: "k8s/{{ item }}" 
-    dest: "/home/ec2-user/k8s/{{ item | basename }}"
+    src: "{{ playbook_dir }}/../k8s/{{ item }}"
+    dest: "/home/ec2-user/k8s/{{ item }}"
     owner: ec2-user
     group: ec2-user
     mode: "0644"
   loop:
-    - "{{ role_path }}/files/k8s/namespace.yml"
-    - "{{ role_path }}/files/k8s/secret.yml"
-    - "{{ role_path }}/files/k8s/configmap.yml"
-    - "{{ role_path }}/files/k8s/storageclass.yml"
-    - "{{ role_path }}/files/k8s/postgres.yml"
-    - "{{ role_path }}/files/k8s/redis.yml"
-    - "{{ role_path }}/files/k8s/kafka.yml"
-    - "{{ role_path }}/files/k8s/user-service.yml"
-    - "{{ role_path }}/files/k8s/transaction-service.yml"
-    - "{{ role_path }}/files/k8s/activity-service.yml"
-    - "{{ role_path }}/files/k8s/ingress.yml"
+    - namespace.yml
+    - secret.yml
+    - configmap.yml
+    - storageclass.yml
+    - postgres.yml
+    - redis.yml
+    - kafka.yml
+    - user-service.yml
+    - transaction-service.yml
+    - activity-service.yml
+    - ingress.yml
 
 - name: Replace app images
   ansible.builtin.replace:
