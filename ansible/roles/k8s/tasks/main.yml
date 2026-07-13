@@ -128,6 +128,29 @@
     recurse: yes
 
 
+# - name: Install ingress-nginx controller
+#   kubernetes.core.helm:
+#     name: ingress-nginx
+#     chart_ref: ingress-nginx/ingress-nginx
+#     release_namespace: ingress-nginx
+#     create_namespace: true
+#     update_repo_cache: true
+#     wait: true
+#     timeout: 900
+#     state: present
+#   become: yes
+#   become_user: ec2-user
+#   environment:
+#     HOME: /home/ec2-user
+#     KUBECONFIG: /home/ec2-user/.kube/config
+#     XDG_CONFIG_HOME: /home/ec2-user/.config
+#     XDG_CACHE_HOME: /home/ec2-user/.cache
+#     XDG_DATA_HOME: /home/ec2-user/.local/share
+#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+#     AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+
 - name: Install ingress-nginx controller
   kubernetes.core.helm:
     name: ingress-nginx
@@ -146,10 +169,12 @@
     XDG_CONFIG_HOME: /home/ec2-user/.config
     XDG_CACHE_HOME: /home/ec2-user/.cache
     XDG_DATA_HOME: /home/ec2-user/.local/share
+    HELM_CONFIG_HOME: /home/ec2-user/.config/helm
+    HELM_CACHE_HOME: /home/ec2-user/.cache/helm
+    HELM_DATA_HOME: /home/ec2-user/.local/share/helm
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-
 
 - name: Create k8s directory on EC2
   ansible.builtin.file:
