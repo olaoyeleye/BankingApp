@@ -104,6 +104,8 @@
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
     AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
 
 - name: Create k8s directory on EC2
   ansible.builtin.file:
@@ -155,6 +157,8 @@
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
     AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
   register: sc_fix
 
 - name: Clean up old banking namespace
@@ -164,6 +168,8 @@
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
     AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
 
 - name: Apply infrastructure
   ansible.builtin.shell: |
@@ -177,6 +183,8 @@
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
 
 - name: Apply app services
@@ -188,6 +196,8 @@
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
 
 - name: Apply ingress resource
@@ -196,4 +206,6 @@
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
