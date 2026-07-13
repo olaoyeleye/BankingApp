@@ -377,7 +377,9 @@ jobs:
 
       - name: Map EC2 IAM identity inside EKS
         if: steps.set-action.outputs.action != 'destroy'
-        shell: bash
+        shell: bash 
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
           aws eks update-kubeconfig \
             --name "${{ secrets.EKS_CLUSTER_NAME }}" \
