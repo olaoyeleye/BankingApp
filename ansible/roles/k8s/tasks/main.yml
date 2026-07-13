@@ -66,13 +66,15 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
 
-    
+
 - name: Verify cluster access
   ansible.builtin.command: kubectl get nodes
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
   changed_when: false
 
@@ -83,6 +85,9 @@
   environment:
     KUBECONFIG: /home/ec2-user/.kube/config
     HOME: /home/ec2-user
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
 
 - name: Install ingress-nginx controller
   kubernetes.core.helm:
