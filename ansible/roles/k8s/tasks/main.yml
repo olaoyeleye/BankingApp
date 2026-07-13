@@ -9,8 +9,7 @@
 - name: Ensure required packages are installed
   ansible.builtin.shell: |
     dnf install -y --allowerasing curl git unzip
-  args:
-    warn: false
+  changed_when: false
 
 
 - name: Install AWS CLI v2
