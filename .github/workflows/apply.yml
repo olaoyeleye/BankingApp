@@ -179,6 +179,7 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |  
+        
           helm uninstall ingress-nginx -n ingress-nginx || true
           terraform state rm helm_release.ingress_nginx || true
           terraform state rm kubernetes_namespace_v1.banking || true
@@ -219,6 +220,8 @@ jobs:
           POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
         run: |
           set -euo pipefail
+          terraform import aws_iam_role.aws_load_balancer_controller tai-key-vpc-aws-load-balancer-controller-role || true
+          terraform import aws_iam_policy.aws_load_balancer_controller arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:policy/tai-key-AWSLoadBalancerControllerIAMPolicy || true   
 
           ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
           POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
