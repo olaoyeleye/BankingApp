@@ -127,30 +127,6 @@
     group: ec2-user
     recurse: yes
 
-
-# - name: Install ingress-nginx controller
-#   kubernetes.core.helm:
-#     name: ingress-nginx
-#     chart_ref: ingress-nginx/ingress-nginx
-#     release_namespace: ingress-nginx
-#     create_namespace: true
-#     update_repo_cache: true
-#     wait: true
-#     timeout: 900
-#     state: present
-#   become: yes
-#   become_user: ec2-user
-#   environment:
-#     HOME: /home/ec2-user
-#     KUBECONFIG: /home/ec2-user/.kube/config
-#     XDG_CONFIG_HOME: /home/ec2-user/.config
-#     XDG_CACHE_HOME: /home/ec2-user/.cache
-#     XDG_DATA_HOME: /home/ec2-user/.local/share
-#     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-#     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-#     AWS_DEFAULT_REGION: "{{ aws_region }}"
-
-
 - name: Install ingress-nginx controller
   kubernetes.core.helm:
     name: ingress-nginx
@@ -159,7 +135,7 @@
     create_namespace: true
     update_repo_cache: true
     wait: true
-    timeout: 900
+    timeout: 15m
     state: present
   become: yes
   become_user: ec2-user
@@ -210,10 +186,10 @@
     regexp: "{{ item.search }}"
     replace: "{{ item.value }}"
   loop:
-    - { file: "user-service.yml", search: "YOUR_ECR_URL/user-service:latest", value: "{{ user_service_image }}" }
-    - { file: "transaction-service.yml", search: "YOUR_ECR_URL/transaction-service:latest", value: "{{ transaction_service_image }}" }
-    - { file: "activity-service.yml", search: "YOUR_ECR_URL/activity-service:latest", value: "{{ activity_service_image }}" }
-    - { file: "postgres.yml", search: "YOUR_ECR_URL/bank-app-postgres:latest", value: "{{ postgres_image }}" }
+    - { file: "user-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/user-service:latest", value: "{{ user_service_image }}" }
+    - { file: "transaction-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/transaction-service:latest", value: "{{ transaction_service_image }}" }
+    - { file: "activity-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/activity-service:latest", value: "{{ activity_service_image }}" }
+    - { file: "postgres.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/bank-app-postgres:latest", value: "{{ postgres_image }}" }
 
 - name: Fix StorageClass
   ansible.builtin.shell: |
