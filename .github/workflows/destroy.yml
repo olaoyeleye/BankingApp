@@ -162,7 +162,23 @@ jobs:
             --region "${{ secrets.AWS_REGION }}" || true
 
 
- 
+      - name: Remove cluster from Terraform state
+        shell: bash
+        run: |
+          aws eks delete-nodegroup \
+            --cluster-name tai-key-cluster \
+            --nodegroup-name main-nodes \
+            --region eu-west-1 || true
+          terraform state rm aws_eks_node_group.main || true  
+          aws eks wait nodegroup-deleted \
+            --cluster-name tai-key-cluster \
+            --nodegroup-name main-nodes \
+            --region eu-west-1
+          aws eks delete-cluster \
+            --name tai-key-cluster \
+            --region eu-west-1 || true  
+          terraform state rm aws_eks_cluster.main || true
+
 
       - name: Delete leftover security groups
         shell: bash
