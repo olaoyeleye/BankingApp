@@ -203,17 +203,31 @@
     - ingress.yml
 
 
-- name: Replace app images
-  ansible.builtin.replace:
-    path: "/home/ec2-user/k8s/{{ item.file }}"
-    regexp: "{{ item.search }}"
-    replace: "{{ item.value }}"
-  loop:
-    - { file: "user-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/bank-app-user-service/user-service:latest", value: "{{ user_service_image }}" }
-    - { file: "transaction-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/bank-app-transaction-service/transaction-service:latest", value: "{{ transaction_service_image }}" }
-    - { file: "activity-service.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/bank-app-activity-service/activity-service:latest", value: "{{ activity_service_image }}" }
-    - { file: "postgres.yml", search: "229378727509.dkr.ecr.eu-west-1.amazonaws.com/bank-app-postgres/bank-app-postgres:latest", value: "{{ postgres_image }}" }
 
+- name: Set app image in user-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/user-service.yml
+    regexp: 'YOUR_ECR_URL/user-service:latest'
+    replace: "{{ user_service_image }}"
+
+- name: Set app image in transaction-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/transaction-service.yml
+    regexp: 'YOUR_ECR_URL/transaction-service:latest'
+    replace: "{{ transaction_service_image }}"
+
+- name: Set app image in activity-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/activity-service.yml
+    regexp: 'YOUR_ECR_URL/activity-service:latest'
+    replace: "{{ activity_service_image }}"
+
+- name: Set app image in postgres.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/postgres.yml
+    regexp: 'YOUR_ECR_URL/bank-app-postgres:latest'
+    replace: "{{ postgres_image }}"
+    
 - name: Fix StorageClass
   ansible.builtin.shell: |
     kubectl delete storageclass gp2 --ignore-not-found=true
