@@ -34,12 +34,11 @@
     AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
     AWS_DEFAULT_REGION: "{{ aws_region }}"
-  ansible.builtin.shell: |
+  ansible.builtin.command: >
     kubectl apply -f /home/ec2-user/k8s/frontend.yml
-  #kubectl apply -f /home/ec2-user/k8s/ingress.yml
   register: infra_apply
 
-- name: Wait for ingress ALB hostname
+- name: Wait for ingress hostname
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
@@ -48,16 +47,16 @@
     kubectl wait
     --namespace banking
     --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-    ingress/banking-ingress
+    ingress/banking-ingress-nginx
     --timeout=300s
 
-- name: Get ingress ALB hostname
+- name: Get ingress hostname
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
     KUBECONFIG: /home/ec2-user/.kube/config
   ansible.builtin.command: >
-    kubectl get ingress banking-ingress
+    kubectl get ingress banking-ingress-nginx
     -n banking
     -o jsonpath={.status.loadBalancer.ingress[0].hostname}
   register: ingress_hostname
