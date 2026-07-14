@@ -1,69 +1,38 @@
-resource "kubernetes_ingress_v1" "banking_ingress_nginx" {
-  metadata {
-    name      = "banking-ingress-nginx"
-    namespace = "banking"
-  }
-
-  spec {
-    ingress_class_name = "nginx"
-
-    rule {
-      host = var.app_domain
-      http {
-        path {
-          path      = "/users"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = "user-service"
-              port {
-                number = 8000
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/transactions"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = "transaction-service"
-              port {
-                number = 8080
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/activity"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = "activity-service"
-              port {
-                number = 8001
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = "bank-frontend"
-              port {
-                number = 3000
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  depends_on = [helm_release.ingress_nginx]
-}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: banking-ingress-nginx
+  namespace: banking
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 8000
+          - path: /transactions
+            pathType: Prefix
+            backend:
+              service:
+                name: transaction-service
+                port:
+                  number: 8080
+          - path: /activity
+            pathType: Prefix
+            backend:
+              service:
+                name: activity-service
+                port:
+                  number: 8001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bank-frontend
+                port:
+                  number: 3000
