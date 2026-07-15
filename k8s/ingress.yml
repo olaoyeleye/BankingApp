@@ -8,7 +8,7 @@ spec:
   rules:
     - http:
         paths:
-          - path: /  #users
+          - path: /users
             pathType: Prefix
             backend:
               service:
