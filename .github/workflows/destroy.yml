@@ -162,6 +162,10 @@ jobs:
             --region "${{ secrets.AWS_REGION }}" || true
 
 
+
+
+
+
       - name: Remove cluster from Terraform state
         shell: bash
         run: |
