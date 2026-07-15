@@ -232,6 +232,7 @@ jobs:
               --group-id "$SG_ID" || true
           done
 
+
       - name: Remove Terraform state for manually deleted resources
         working-directory: ./terraform
         shell: bash
