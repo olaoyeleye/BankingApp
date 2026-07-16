@@ -199,23 +199,23 @@
   ansible.builtin.command: helm repo update
   changed_when: false
 
-- name: Install python3 and pip3
-  become: true
-  ansible.builtin.package:
-    name:
-      - python3
-      - python3-pip
-      - python3-setuptools
-    state: present
+# - name: Install python3 and pip3
+#   become: true
+#   ansible.builtin.package:
+#     name:
+#       - python3
+#       - python3-pip
+#       - python3-setuptools
+#     state: present
 
-- name: Install Python dependencies for kubernetes.core
-  become: true
-  ansible.builtin.pip:
-    name:
-      - kubernetes
-      - pyyaml
-      - jsonpatch
-    executable: pip3
+# - name: Install Python dependencies for kubernetes.core
+#   become: true
+#   ansible.builtin.pip:
+#     name:
+#       - kubernetes
+#       - pyyaml
+#       - jsonpatch
+#     executable: pip3
 
 # - name: Create datadog namespace
 #   kubernetes.core.k8s:
