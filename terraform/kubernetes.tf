@@ -147,6 +147,8 @@ resource "aws_eks_node_group" "main" {
     min_size     = 17
   }
 
+
+
   update_config {
     max_unavailable = 1
   }
