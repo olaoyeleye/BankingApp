@@ -9,7 +9,7 @@ data:
   REDIS_PORT: "6379"
   SERVER_PORT: "8080"
 
-  FRONTEND_ORIGIN: "http://k8s-banking-bankingi-b1fa44e3bb-1345513901.eu-west-1.elb.amazonaws.com"
+  FRONTEND_ORIGIN: bank-frontend
 
   KAFKA_NODE_ID: "1"
   KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
@@ -31,7 +31,7 @@ data:
   SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
 
   ACTIVITY_SERVICE: "http://activity-service:8001"
-  BANK_FRONTEND: "http://bank-frontend:3000"
+  BANK_FRONTEND: bank-frontend
   TRANSACTION_SERVICE: "http://transaction-service:8080"
   USER_SERVICE: "http://user-service:8000"
 

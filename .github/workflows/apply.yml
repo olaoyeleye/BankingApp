@@ -499,3 +499,7 @@ jobs:
             -e "ssh -i /home/runner/.ssh/ansible_key.pem -o StrictHostKeyChecking=no" \
             ${{ github.workspace }}/ \
             ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }}:/home/ec2-user/manifest-repo/
+
+
+
+#sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx

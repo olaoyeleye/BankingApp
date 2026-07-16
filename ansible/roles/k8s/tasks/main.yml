@@ -221,6 +221,17 @@
   ansible.builtin.command: helm repo update
   changed_when: false
 
+
+- name: Install Python dependencies for kubernetes.core
+  become: true
+  ansible.builtin.pip:
+    name:
+      - kubernetes
+      - pyyaml
+      - jsonpatch
+    executable: pip3
+
+    
 - name: Create datadog namespace
   kubernetes.core.k8s:
     api_version: v1
