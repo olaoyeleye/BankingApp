@@ -201,6 +201,7 @@
     - transaction-service.yml
     - activity-service.yml
     - ingress.yml
+    - datadog-agent.yml
 
 
 
