@@ -217,36 +217,36 @@
       - jsonpatch
     executable: pip3
 
-- name: Create datadog namespace
-  kubernetes.core.k8s:
-    api_version: v1
-    kind: Namespace
-    name: datadog
-    state: present
-    kubeconfig: /home/ec2-user/.kube/config
-  become_user: ec2-user
+# - name: Create datadog namespace
+#   kubernetes.core.k8s:
+#     api_version: v1
+#     kind: Namespace
+#     name: datadog
+#     state: present
+#     kubeconfig: /home/ec2-user/.kube/config
+#   become_user: ec2-user
 
-- name: Install Datadog Operator
-  ansible.builtin.command: >
-    helm upgrade --install datadog-operator datadog/datadog-operator
-    --namespace datadog
-    --create-namespace
-  register: dd_operator_install
-  changed_when: "'deployed' in dd_operator_install.stdout.lower() or 'upgraded' in dd_operator_install.stdout.lower()"
+# - name: Install Datadog Operator
+#   ansible.builtin.command: >
+#     helm upgrade --install datadog-operator datadog/datadog-operator
+#     --namespace datadog
+#     --create-namespace
+#   register: dd_operator_install
+#   changed_when: "'deployed' in dd_operator_install.stdout.lower() or 'upgraded' in dd_operator_install.stdout.lower()"
 
-- name: Create Datadog secret
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: datadog-secret
-        namespace: datadog
-      type: Opaque
-      stringData:
-        api-key: "{{ datadog_api_key }}"
-        app-key: "{{ datadog_app_key | default(omit) }}"
+# - name: Create Datadog secret
+#   kubernetes.core.k8s:
+#     state: present
+#     definition:
+#       apiVersion: v1
+#       kind: Secret
+#       metadata:
+#         name: datadog-secret
+#         namespace: datadog
+#       type: Opaque
+#       stringData:
+#         api-key: "{{ datadog_api_key }}"
+#         app-key: "{{ datadog_app_key | default(omit) }}"
 
 
 
@@ -314,7 +314,7 @@
     kubectl apply -f /home/ec2-user/k8s/postgres.yml
     kubectl apply -f /home/ec2-user/k8s/redis.yml
     kubectl apply -f /home/ec2-user/k8s/kafka.yml
-#kubectl apply -f /home/ec2-user/k8s/datadog-agent.yml
+    kubectl apply -f /home/ec2-user/k8s/datadog-agent.yml
   become_user: ec2-user
   environment:
     HOME: /home/ec2-user
