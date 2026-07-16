@@ -142,9 +142,9 @@ resource "aws_eks_node_group" "main" {
   ]
 
   scaling_config {
-    desired_size = 19
-    max_size     = 19
-    min_size     = 19
+    desired_size = 18
+    max_size     = 18
+    min_size     = 18
   }
 
 
