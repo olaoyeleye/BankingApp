@@ -1,0 +1,3 @@
+---  
+datadog_api_key: "{{ lookup('env', 'DATADOG_API_KEY') }}"
+datadog_app_key: "{{ lookup('env', 'DATADOG_APP_KEY') | default('') }}"

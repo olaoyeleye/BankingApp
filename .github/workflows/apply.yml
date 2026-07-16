@@ -393,6 +393,9 @@ jobs:
       - name: Run Ansible playbook (backend)
         if: steps.set-action.outputs.action != 'destroy'
         working-directory: ./ansible
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API }}
+          DATADOG_APP_KEY: ${{ secrets.DATADOG_APP }}
         shell: bash
         run: |
           ANSIBLE_CONFIG=ansible.cfg \
