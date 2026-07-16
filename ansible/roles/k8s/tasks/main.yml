@@ -223,6 +223,8 @@
     kind: Namespace
     name: datadog
     state: present
+    kubeconfig: /home/ec2-user/.kube/config
+  become_user: ec2-user
 
 - name: Install Datadog Operator
   ansible.builtin.command: >
