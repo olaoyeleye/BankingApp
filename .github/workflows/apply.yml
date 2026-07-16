@@ -1,0 +1,505 @@
+name: Deploy Entire Infra
+
+on:
+  push:
+    branches: ["dev", "main", "feat-dev", "master"]
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: "Terraform action to run"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Terraform Action
+        id: set-action
+        shell: bash
+        run: |
+          ACTION="${{ github.event.inputs.terraform_action }}"
+          if [ -z "$ACTION" ]; then
+            ACTION="apply"
+          fi
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "Terraform action: $ACTION"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Create terraform.tfvars
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          cat > terraform.tfvars <<EOF
+          region              = "${{ secrets.AWS_REGION }}"
+          ami                 = "${{ secrets.AMI_ID }}"
+          instance_type       = "${{ secrets.INSTANCE_TYPE }}"
+          instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
+          vpc_name            = "${{ secrets.VPC_NAME }}"
+          key_name            = "${{ secrets.KEY_NAME }}"
+          AWS_ACCOUNT_ID      = "${{ secrets.AWS_ACCOUNT_ID }}"
+          EOF
+
+      - name: Download AWS Load Balancer Controller IAM Policy
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+      - name: Import Existing OIDC Provider if it exists
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          echo "Checking if EKS cluster exists..."
+          CLUSTER_EXISTS=$(aws eks list-clusters \
+            --region "${{ secrets.AWS_REGION }}" \
+            --query "clusters[?@=='${{ secrets.EKS_CLUSTER_NAME }}']" \
+            --output text)
+
+          if [ -z "$CLUSTER_EXISTS" ]; then
+            echo "Cluster '${{ secrets.EKS_CLUSTER_NAME }}' does not exist yet. Skipping OIDC import for fresh installation."
+          else
+            echo "Cluster found. Fetching OIDC Issuer URL..."
+            OIDC_URL=$(aws eks describe-cluster \
+              --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query "cluster.identity.oidc.issuer" \
+              --output text)
+
+            if [ -z "$OIDC_URL" ] || [[ ! "$OIDC_URL" =~ ^https:// ]]; then
+              echo "ERROR: Received an invalid or empty OIDC URL: '$OIDC_URL'"
+              exit 1
+            fi
+
+            ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+            PROVIDER_ARN="arn:aws:iam::$ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
+
+            if ! terraform state show aws_iam_openid_connect_provider.eks >/dev/null 2>&1; then
+              terraform import aws_iam_openid_connect_provider.eks "$PROVIDER_ARN" || true
+            fi
+          fi
+
+
+          
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init --reconfigure
+
+      # - name: Import IAM role and policy if they already exist
+      #   if: steps.set-action.outputs.action != 'destroy'
+      #   working-directory: ./terraform
+      #   shell: bash
+      #   env:
+      #     ROLE_NAME: tai-key-eks-cluster-role
+      #     POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
+      #   run: |
+      #     set -euo pipefail
+      #     ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
+      #     POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
+      #     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      #     POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${POLICY_NAME}"
+
+      #     if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+      #       if ! terraform state list | grep -qx "$ROLE_ADDR"; then
+      #         terraform import "$ROLE_ADDR" "$ROLE_NAME" || true
+      #       fi
+      #     fi
+
+      #     if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+      #       if ! terraform state list | grep -qx "$POLICY_ADDR"; then
+      #         terraform import "$POLICY_ADDR" "$POLICY_ARN" || true
+      #       fi
+      #     fi
+
+      - name: Delete EKS node groups first
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLUSTER_NAME="${{ secrets.EKS_CLUSTER_NAME }}"
+          REGION="${{ secrets.AWS_REGION }}"
+
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            NODEGROUPS=$(aws eks list-nodegroups \
+              --cluster-name "$CLUSTER_NAME" \
+              --region "$REGION" \
+              --query 'nodegroups[]' \
+              --output text)
+
+            if [ -n "${NODEGROUPS// /}" ]; then
+              for NG in $NODEGROUPS; do
+                aws eks delete-nodegroup \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
+
+                aws eks wait nodegroup-deleted \
+                  --cluster-name "$CLUSTER_NAME" \
+                  --nodegroup-name "$NG" \
+                  --region "$REGION" || true
+              done
+            fi
+          fi
+         
+      - name: Terraform Apply Specifics.
+        if: steps.set-action.outputs.action == 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          helm uninstall ingress-nginx -n ingress-nginx || true
+          terraform state rm helm_release.ingress_nginx || true
+          terraform state rm kubernetes_namespace_v1.banking || true
+          terraform state rm kubernetes_namespace_v1.ingress_nginx || true
+          terraform state rm kubernetes_service_v1.bank_frontend || true
+          terraform state rm helm_release.ebs_csi_driver || true
+          terraform state rm aws_eks_node_group.main || true
+
+          terraform apply \
+            -target=aws_vpc.vpc \
+            -target=aws_subnet.public-kunle-subnet \
+            -target=aws_subnet.public-kunle-subnet-2 \
+            -target=aws_internet_gateway.kunle-igw \
+            -target=aws_route_table.public-kunle-rt \
+            -target=aws_route_table_association.public_subnet_1 \
+            -target=aws_route_table_association.public_subnet_2 \
+            -target=aws_security_group.public-kunle-sg \
+            -target=aws_iam_role.eks_cluster \
+            -target=aws_iam_role.eks_nodes \
+            -target=aws_iam_role_policy_attachment.eks_cluster_policy \
+            -target=aws_iam_role_policy_attachment.eks_worker_node_policy \
+            -target=aws_iam_role_policy_attachment.eks_cni_policy \
+            -target=aws_iam_role_policy_attachment.eks_registry_policy \
+            -target=aws_eks_cluster.main \
+            -target=aws_iam_openid_connect_provider.eks \
+            -auto-approve
+
+      # - name: Import existing IAM role and policy
+      #   if: steps.set-action.outputs.action != 'destroy'
+      #   working-directory: ./terraform
+      #   shell: bash
+      #   env:
+      #     ROLE_NAME: tai-key-eks-cluster-role
+      #     POLICY_NAME: tai-key-AWSLoadBalancerControllerIAMPolicy
+      #   run: |
+      #     set -euo pipefail
+      #     ROLE_ADDR="aws_iam_role.aws_load_balancer_controller"
+      #     POLICY_ADDR="aws_iam_policy.aws_load_balancer_controller"
+      #     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      #     POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${POLICY_NAME}"
+
+      #     if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+      #       if ! terraform state list | grep -qx "$ROLE_ADDR"; then
+      #         terraform import "$ROLE_ADDR" "$ROLE_NAME" || true
+      #       fi
+      #     fi
+
+      #     if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+      #       if ! terraform state list | grep -qx "$POLICY_ADDR"; then
+      #         terraform import "$POLICY_ADDR" "$POLICY_ARN" || true
+      #       fi
+      #     fi
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        shell: bash
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+
+        
+      - name: Install kubectl
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Login to Amazon ECR
+        if: steps.set-action.outputs.action != 'destroy'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag and Push image to ECR (User)
+        if: steps.set-action.outputs.action != 'destroy'
+        id: build-user-service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-user-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./user-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Transaction)
+        if: steps.set-action.outputs.action != 'destroy'
+        id: build-transaction-service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-transaction-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./transaction-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Activity)
+        if: steps.set-action.outputs.action != 'destroy'
+        id: build-activity-service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-activity-service
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./activity-service
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Build, Tag and Push image to ECR (Postgres Init)
+        if: steps.set-action.outputs.action != 'destroy'
+        id: build-postgres-service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-postgres
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-backend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" ./db-init
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Install Ansible
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install ansible boto3 botocore
+
+      - name: Install eksctl
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          curl --silent --location \
+            "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
+            | tar xz -C /tmp
+          sudo mv /tmp/eksctl /usr/local/bin
+
+      - name: Get Nginx public IP
+        if: steps.set-action.outputs.action != 'destroy'
+        id: nginx-ip
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          echo "NGINX_IP=$(terraform output -raw nginx_public_ip)" >> "$GITHUB_OUTPUT"
+
+      - name: Save SSH private key
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          mkdir -p /home/runner/.ssh
+          echo "$SSH_KEY" > /home/runner/.ssh/ansible_key.pem
+          chmod 600 /home/runner/.ssh/ansible_key.pem
+
+      - name: Wait for EC2 to be ready
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          for i in {1..12}; do
+            ssh -i /home/runner/.ssh/ansible_key.pem \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }} \
+              "echo ready" && break
+            sleep 15
+          done
+
+      - name: Map EC2 IAM identity inside EKS
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          eksctl create iamidentitymapping \
+            --cluster "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --arn "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.VPC_NAME }}-ec2-eks-role" \
+            --username ec2-eks-role \
+            --group system:masters \
+            --no-duplicate-arns
+
+      - name: Create Ansible inventory
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          cat > ansible/hosts.ini <<EOF
+          [nginx]
+          nginx ansible_host=${{ steps.nginx-ip.outputs.NGINX_IP }}
+
+          [nginx:vars]
+          ansible_user=ec2-user
+          ansible_ssh_private_key_file=/home/runner/.ssh/ansible_key.pem
+          ansible_ssh_common_args='-o StrictHostKeyChecking=no -o IdentitiesOnly=yes'
+          aws_region=${{ secrets.AWS_REGION }}
+          eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}
+          EOF
+
+      - name: Run Ansible playbook (backend)
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./ansible
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API }}
+          DATADOG_APP_KEY: ${{ secrets.DATADOG_APP }}
+        shell: bash
+        run: |
+          ANSIBLE_CONFIG=ansible.cfg \
+          ansible-playbook playbook.yml \
+            --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}" \
+            --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
+            --extra-vars "user_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-user-service:${{ github.sha }}" \
+            --extra-vars "transaction_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-transaction-service:${{ github.sha }}" \
+            --extra-vars "postgres_image=${{ steps.login-ecr.outputs.registry }}/bank-app-postgres:${{ github.sha }}" \
+            --extra-vars "activity_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-activity-service:${{ github.sha }}"
+
+      - name: Update frontend API endpoints
+        if: steps.set-action.outputs.action != 'destroy'
+        working-directory: ./techbleat-global-bank-frontend
+        shell: bash
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          INGRESS_HOST=""
+          for i in {1..20}; do
+            INGRESS_HOST=$(kubectl -n banking get ingress banking-ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -n "$INGRESS_HOST" ]; then
+              break
+            fi
+            echo "Attempt $i: ingress host not ready, waiting 15s..."
+            sleep 15
+          done
+
+          if [ -z "$INGRESS_HOST" ]; then
+            echo "Ingress host is empty"
+            kubectl -n banking get ingress
+            exit 1
+          fi
+
+          sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx
+          cat src/App.jsx | head -n 10
+
+      - name: Build, Tag and Push frontend image to ECR
+        if: steps.set-action.outputs.action != 'destroy'
+        id: build-frontend-service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bank-app-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./techbleat-global-bank-frontend
+        shell: bash
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+      - name: Run Ansible playbook (frontend)
+        if: steps.set-action.outputs.action != 'destroy'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          ANSIBLE_CONFIG=ansible/ansible.cfg \
+          ansible-playbook ansible/playbook_frontend.yml \
+            --extra-vars "eks_cluster_name=${{ secrets.EKS_CLUSTER_NAME }}" \
+            --extra-vars "aws_region=${{ secrets.AWS_REGION }}" \
+            --extra-vars "frontend_service_image=${{ steps.login-ecr.outputs.registry }}/bank-app-frontend:${{ github.sha }}"
+
+      - name: Get Ingress URL
+        if: steps.set-action.outputs.action != 'destroy'
+        id: get-ingress-url
+        shell: bash
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ secrets.EKS_CLUSTER_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          echo "Waiting for Ingress ALB address..."
+          INGRESS_ALB=""
+          for i in {1..20}; do
+            INGRESS_ALB=$(kubectl -n banking get ingress banking-ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -n "$INGRESS_ALB" ]; then
+              break
+            fi
+            echo "Attempt $i: Ingress ALB not assigned yet, waiting 20s..."
+            sleep 20
+          done
+
+          echo "alb_url=$INGRESS_ALB" >> "$GITHUB_OUTPUT"
+          echo "Ingress ALB URL: $INGRESS_ALB"
+
+      - name: Copy manifest repo to EC2
+        if: steps.set-action.outputs.action != 'destroy'
+        shell: bash
+        run: |
+          rsync -avz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.github' \
+            --exclude='terraform/.terraform' \
+            --exclude='terraform/tfplan' \
+            -e "ssh -i /home/runner/.ssh/ansible_key.pem -o StrictHostKeyChecking=no" \
+            ${{ github.workspace }}/ \
+            ec2-user@${{ steps.nginx-ip.outputs.NGINX_IP }}:/home/ec2-user/manifest-repo/
+
+
+
+#sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx
