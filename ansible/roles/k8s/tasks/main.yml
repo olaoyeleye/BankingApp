@@ -231,8 +231,6 @@
       - jsonpatch
     executable: pip3
 
-    
-    
 - name: Create datadog namespace
   kubernetes.core.k8s:
     api_version: v1
