@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
-const USER_API = "http://INGRESS_HOST/users";
-const TX_API = "http://INGRESS_HOST/transactions";
-const ACTIVITY_API = "http://INGRESS_HOST/activities";
+//const USER_API = "http://INGRESS_HOST/users";
+//const TX_API = "http://INGRESS_HOST/transactions";
+//const ACTIVITY_API = "http://INGRESS_HOST/activities";
+
+
+const USER_API = "http://INGRESS_HOST";
+const TX_API = "http://INGRESS_HOST";
+const ACTIVITY_API = "http://INGRESS_HOST";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
