@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
-const USER_API = "${INGRESS_HOST}/users";
-const TX_API = "${INGRESS_HOST}/transactions";
-const ACTIVITY_API = "${INGRESS_HOST}/activities";
+const USER_API = "INGRESS_HOST/users";
+const TX_API = "INGRESS_HOST/transactions";
+const ACTIVITY_API = "INGRESS_HOST/activities";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
