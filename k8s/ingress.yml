@@ -3,11 +3,18 @@ kind: Ingress
 metadata:
   name: banking-ingress-nginx
   namespace: banking
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
+  tls:
+  - hosts:
+    - techbleatbank.duckdns.org
+    secretName: techbleatbank-tls
   rules:
-    - http:
-        paths:
+  - host: techbleatbank.duckdns.org
+    http:
+      paths:
           - path: /users
             pathType: Prefix
             backend:
@@ -22,7 +29,7 @@ spec:
                 name: transaction-service
                 port:
                   number: 8080
-          - path: /activity
+          - path: /activities
             pathType: Prefix
             backend:
               service:
