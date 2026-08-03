@@ -10,7 +10,6 @@ const TX_API = "https://INGRESS_HOST";
 const ACTIVITY_API = "https://INGRESS_HOST";
 
 
-
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
