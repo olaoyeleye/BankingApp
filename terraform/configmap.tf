@@ -1,1 +1,0 @@
-# Kubernetes ConfigMap resources are managed by Ansible, not Terraform.
