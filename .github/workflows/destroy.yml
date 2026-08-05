@@ -25,6 +25,8 @@ jobs:
 
 
 
+
+
       - name: Verify AWS identity
         shell: bash
         run: aws sts get-caller-identity
