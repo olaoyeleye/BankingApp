@@ -5,9 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 //const ACTIVITY_API = "http://INGRESS_HOST/activities";
 
 
-const USER_API = "/user-service";
-const TX_API = "/transaction-service";
-const ACTIVITY_API = "/activity-service";
+const USER_API = "/users";
+const TX_API = "/transactions";
+const ACTIVITY_API = "/activities";
 
 
 const currency = new Intl.NumberFormat("en-GB", {

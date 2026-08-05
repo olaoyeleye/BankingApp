@@ -4,38 +4,42 @@ metadata:
   name: banking-ingress-nginx
   namespace: banking
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod" 
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod" 
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://techbleatbank.duckdns.org"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*" 
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "https://techbleatbank.duckdns.org"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS, PATCH"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
 spec:
   ingressClassName: nginx
-  tls:
-  - hosts:
-    - techbleatbank.duckdns.org
-    secretName: techbleatbank-tls
+  # tls:
+  # - hosts:
+  #   - techbleatbank.duckdns.org
+  #   secretName: techbleatbank-tls
   rules:
-  - host: techbleatbank.duckdns.org
-    http:
+  # - host: techbleatbank.duckdns.org
+  - http:
       paths:
-          - path: /users
-            pathType: Prefix
+          - path: /users(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: user-service
                 port:
                   number: 8000
-          - path: /transactions
-            pathType: Prefix
+          - path: /transactions(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: transaction-service
                 port:
                   number: 8080
-          - path: /activities
-            pathType: Prefix
+          - path: /activities(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: activity-service
