@@ -45,8 +45,8 @@ spec:
                 name: activity-service
                 port:
                   number: 8001
-          - path: /
-            pathType: Prefix
+          - path: /()(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: bank-frontend
