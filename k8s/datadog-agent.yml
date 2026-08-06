@@ -10,8 +10,7 @@ metadata:
   namespace: datadog
 type: Opaque
 stringData:
-  api-key: "${DATADOG_API_KEY}"
-  app-key: "${DATADOG_APP_KEY}"
+  api-key: "${DATADOG_API_KEY}" 
 ---
 apiVersion: datadoghq.com/v2alpha1
 kind: DatadogAgent
@@ -20,19 +19,29 @@ metadata:
   namespace: datadog
 spec:
   global:
+    clusterName: "tai-key-cluster"
+    site: "datadoghq.eu"
     credentials:
       apiSecret:
         secretName: datadog-secret
         keyName: api-key
   features:
-    kubeStateMetricsCore:
-      enabled: true
-  override:
-    clusterAgent:
-      env:
-        - name: DD_LOGS_ENABLED
-          value: "true"
-        - name: DD_APM_ENABLED
-          value: "true"
-        - name: DD_PROCESS_AGENT_ENABLED
-          value: "true"
+      clusterChecks:
+        enabled: true
+      orchestratorExplorer:
+        enabled: true
+      logCollection:
+        enabled: true
+        containerCollectAll: true
+      apm:
+        instrumentation:
+          enabled: true
+          targets:
+            - name: "default-target"
+              ddTraceVersions:
+                java: "1"
+                python: "4"
+                js: "5"
+                php: "1"
+                dotnet: "3"
+                ruby: "2"
