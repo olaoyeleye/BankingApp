@@ -181,7 +181,7 @@
     - datadog-agent.yml
 
 
-- name: Add Datadog Helm repo
+- name: Add Datadog Helm repo.
   ansible.builtin.command: helm repo add datadog https://helm.datadoghq.com
   register: dd_repo_add
   failed_when: dd_repo_add.rc not in [0]
@@ -191,7 +191,7 @@
   ansible.builtin.command: helm repo update
   changed_when: false
 
-- name: Set app image in user-service.yml
+- name: Set app image in user-service.yml.
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/user-service.yml
     regexp: 'YOUR_ECR_URL/user-service:latest'
