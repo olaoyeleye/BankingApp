@@ -24,22 +24,22 @@ spec:
   # - host: techbleatbank.duckdns.org
   - http:
       paths:
-          - path: /users(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /users
+            pathType: Prefix
             backend:
               service:
                 name: user-service
                 port:
                   number: 8000
-          - path: /transactions(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /transactions
+            pathType: Prefix
             backend:
               service:
                 name: transaction-service
                 port:
                   number: 8080
-          - path: /activities(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /activities
+            pathType: Prefix
             backend:
               service:
                 name: activity-service
