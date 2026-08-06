@@ -182,13 +182,6 @@
     - datadog-agent.yml
 
 
-
-
-
-
-
-
-
 - name: Add Datadog Helm repo
   ansible.builtin.command: helm repo add datadog https://helm.datadoghq.com
   register: dd_repo_add
@@ -198,64 +191,6 @@
 - name: Update Helm repo
   ansible.builtin.command: helm repo update
   changed_when: false
-
-# - name: Install python3 and pip3
-#   become: true
-#   ansible.builtin.package:
-#     name:
-#       - python3
-#       - python3-pip
-#       - python3-setuptools
-#     state: present
-
-# - name: Install Python dependencies for kubernetes.core
-#   become: true
-#   ansible.builtin.pip:
-#     name:
-#       - kubernetes
-#       - pyyaml
-#       - jsonpatch
-#     executable: pip3
-
-# - name: Create datadog namespace
-#   kubernetes.core.k8s:
-#     api_version: v1
-#     kind: Namespace
-#     name: datadog
-#     state: present
-#     kubeconfig: /home/ec2-user/.kube/config
-#   become_user: ec2-user
-
-# - name: Install Datadog Operator
-#   ansible.builtin.command: >
-#     helm upgrade --install datadog-operator datadog/datadog-operator
-#     --namespace datadog
-#     --create-namespace
-#   register: dd_operator_install
-#   changed_when: "'deployed' in dd_operator_install.stdout.lower() or 'upgraded' in dd_operator_install.stdout.lower()"
-
-# - name: Create Datadog secret
-#   kubernetes.core.k8s:
-#     state: present
-#     definition:
-#       apiVersion: v1
-#       kind: Secret
-#       metadata:
-#         name: datadog-secret
-#         namespace: datadog
-#       type: Opaque
-#       stringData:
-#         api-key: "{{ datadog_api_key }}"
-#         app-key: "{{ datadog_app_key | default(omit) }}"
-
-
-
-
-
-
-
-
-
 
 - name: Set app image in user-service.yml
   ansible.builtin.replace:

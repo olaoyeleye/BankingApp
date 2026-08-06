@@ -20,7 +20,7 @@ metadata:
 spec:
   global:
     clusterName: "tai-key-cluster"
-    site: "datadoghq.eu"
+    site: "uk1.datadoghq.com"
     credentials:
       apiSecret:
         secretName: datadog-secret
