@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 //const ACTIVITY_API = "http://INGRESS_HOST/activities";
 
 
-const USER_API = "/users";
-const TX_API = "/transactions";
-const ACTIVITY_API = "/activities";
-
+// const USER_API = "/users";
+// const TX_API = "/transactions";
+// const ACTIVITY_API = "/activities";
+const USER_API = "http://INGRESS_HOST";
+const TX_API = "http://INGRESS_HOST";
+const ACTIVITY_API = "http://INGRESS_HOST";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
