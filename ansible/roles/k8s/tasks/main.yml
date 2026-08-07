@@ -191,6 +191,24 @@
   ansible.builtin.command: helm repo update
   changed_when: false
 
+
+#new
+- name: Install Datadog Operator via Helm
+  kubernetes.core.helm:
+    name: datadog-operator
+    chart_ref: datadog/datadog-operator
+    release_namespace: datadog
+    create_namespace: true
+    update_repo_cache: true
+
+- name: Wait for Datadog Operator CRDs to be available
+  ansible.builtin.command: kubectl get crd datadogagents.datadoghq.com
+  register: crd_check
+  retries: 10
+  delay: 10
+  until: crd_check.rc == 0
+
+
 - name: Set app image in user-service.yml.
   ansible.builtin.replace:
     path: /home/ec2-user/k8s/user-service.yml
