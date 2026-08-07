@@ -20,10 +20,10 @@ spec:
         - containerPort: 8000
         resources:
           requests:
-            memory: "96Mi"
-            cpu: "100m"
+            memory: "256Mi"
+            cpu: "150m"
           limits:
-            memory: "192Mi"
+            memory: "512Mi"
             cpu: "200m"
         env:
         - name: DATABASE_URL

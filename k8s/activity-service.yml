@@ -20,11 +20,11 @@ spec:
         - containerPort: 8001
         resources:
           requests:
-            memory: "96Mi"
-            cpu: "100m"
+            memory: "256Mi"
+            cpu: "50m"
           limits:
-            memory: "192Mi"
-            cpu: "200m"
+            memory: "512Mi"
+            cpu: "100m"
         env:
         - name: DATABASE_URL
           valueFrom:
