@@ -3,10 +3,6 @@ name: 1. Provision Infrastructure
 on:
   push:
     branches: [ "dev", "test", "prod" ]
-    paths:
-      - 'terraform/**'
-      - 'ansible/**'
-      - '.github/workflows/infra.yml'
   workflow_dispatch:
 
 permissions:

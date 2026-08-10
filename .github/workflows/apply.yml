@@ -115,6 +115,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Wait for Infrastructure workflow
+        shell: bash
+        run: |
+          BRANCH="${GITHUB_REF##*/}"
+          echo "Waiting for '1. Provision Infrastructure' workflow on branch: $BRANCH"
+          for i in $(seq 1 60); do
+            STATUS=$(gh run list -w "1. Provision Infrastructure" -b "$BRANCH" -L 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "")
+            CONCLUSION=$(gh run list -w "1. Provision Infrastructure" -b "$BRANCH" -L 1 --json status,conclusion -q '.[0].conclusion' 2>/dev/null || echo "")
+            if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+              echo "Infrastructure workflow completed successfully."
+              break
+            fi
+            if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" != "success" ]; then
+              echo "::error::Infrastructure workflow failed (conclusion: $CONCLUSION). Cannot deploy."
+              exit 1
+            fi
+            echo "Attempt $i/60: Infra status=$STATUS conclusion=$CONCLUSION - waiting 30s..."
+            sleep 30
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
