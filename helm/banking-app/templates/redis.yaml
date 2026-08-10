@@ -20,6 +20,16 @@ spec:
         image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
         ports:
         - containerPort: 6379
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
         resources:
           requests:
             memory: "{{ .Values.redis.resources.requests.memory }}"

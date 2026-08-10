@@ -30,6 +30,18 @@ spec:
           limits:
             memory: "{{ .Values.kafka.resources.limits.memory }}"
             cpu: "{{ .Values.kafka.resources.limits.cpu }}"
+        readinessProbe:
+          tcpSocket:
+            port: 29092
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+        livenessProbe:
+          tcpSocket:
+            port: 29092
+          initialDelaySeconds: 60
+          periodSeconds: 15
         envFrom:
         - configMapRef:
             name: banking-config

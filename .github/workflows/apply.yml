@@ -183,7 +183,25 @@ jobs:
             -f ./helm/banking-app/values-${ENV}.yaml \
             --set ecrRegistry="$ECR_REGISTRY" \
             --set imageTag="$IMAGE_TAG" \
-            --wait --timeout 5m
+            --timeout 10m
+      - name: Wait for pods to be ready
+        shell: bash
+        run: |
+          NAMESPACE="banking-${{ needs.set-environment.outputs.environment }}"
+          echo "Waiting for all pods to be ready in $NAMESPACE..."
+          kubectl -n "$NAMESPACE" get pods -o wide || true
+          kubectl -n "$NAMESPACE" wait --for=condition=Ready pods --all --timeout=600s || {
+            echo "=== POD STATUSES ==="
+            kubectl -n "$NAMESPACE" get pods -o wide
+            echo "=== POD EVENTS ==="
+            kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -30
+            echo "=== DESCRIBE FAILING PODS ==="
+            for pod in $(kubectl -n "$NAMESPACE" get pods --field-selector=status.phase!=Running -o jsonpath='{.items[*].metadata.name}'); do
+              kubectl -n "$NAMESPACE" describe pod "$pod" | tail -30
+            done
+            exit 1
+          }
+          echo "All pods are ready!"
       - name: Get Ingress URL
         shell: bash
         run: |

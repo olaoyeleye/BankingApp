@@ -27,6 +27,20 @@ spec:
           limits:
             memory: "{{ .Values.transactionService.resources.limits.memory }}"
             cpu: "{{ .Values.transactionService.resources.limits.cpu }}"
+        readinessProbe:
+          httpGet:
+            path: /balance/0
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /balance/0
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 15
         env:
         - name: SPRING_DATASOURCE_URL
           valueFrom:

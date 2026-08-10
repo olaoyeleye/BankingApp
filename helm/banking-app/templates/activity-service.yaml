@@ -27,6 +27,20 @@ spec:
           limits:
             memory: "{{ .Values.activityService.resources.limits.memory }}"
             cpu: "{{ .Values.activityService.resources.limits.cpu }}"
+        readinessProbe:
+          httpGet:
+            path: /activities/0
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /activities/0
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 15
         env:
         - name: DATABASE_URL
           valueFrom:
