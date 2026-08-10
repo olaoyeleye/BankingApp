@@ -59,6 +59,39 @@ jobs:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform init -reconfigure
 
+      - name: Import existing IAM resources (if they exist)
+        working-directory: ./terraform
+        shell: bash
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          # Get account ID for policy ARN
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          VPC="${{ secrets.VPC_NAME }}"
+
+          # Try importing existing IAM roles/policies - ignore errors (resource may not exist yet)
+          terraform import aws_iam_role.eks_cluster "$VPC-eks-cluster-role" 2>/dev/null || true
+          terraform import aws_iam_role.eks_nodes "$VPC-eks-node-role" 2>/dev/null || true
+          terraform import aws_iam_role.ebs_csi_role "$VPC-ebs-csi-driver-role" 2>/dev/null || true
+          terraform import aws_iam_role.aws_load_balancer_controller "$VPC-aws-load-balancer-controller-role" 2>/dev/null || true
+          terraform import aws_iam_policy.aws_load_balancer_controller "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-AWSLoadBalancerControllerIAMPolicy" 2>/dev/null || true
+
+          # Try importing existing OIDC provider (if cluster already exists)
+          OIDC_URL=$(aws eks describe-cluster --name "$VPC-cluster" --query cluster.identity.oidc.issuer --output text 2>/dev/null || echo "")
+          if [ -n "$OIDC_URL" ] && [ "$OIDC_URL" != "None" ]; then
+            OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviders[?Url=='$OIDC_URL'].Arn" --output text 2>/dev/null || echo "")
+            if [ -n "$OIDC_ARN" ]; then
+              terraform import aws_iam_openid_connect_provider.eks "$OIDC_ARN" 2>/dev/null || true
+            fi
+          fi
+
+          # Try importing existing EKS cluster (if it exists)
+          if aws eks describe-cluster --name "$VPC-cluster" >/dev/null 2>&1; then
+            terraform import aws_eks_cluster.main "$VPC-cluster" 2>/dev/null || true
+          fi
+
+          echo "Import step complete - continuing with plan/apply"
+
       - name: Terraform Plan
         working-directory: ./terraform
         env:
