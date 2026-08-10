@@ -30,9 +30,8 @@ concurrency:
 jobs:
   destroy-app:
     runs-on: ubuntu-latest
-    # Only run on push if commit message contains [destroy], always run on workflow_dispatch
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[destroy]') }}
-    # Destroy requires approval for prod environment
+    # Run on workflow_dispatch always, or on push only when commit message contains "destroy"
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'destroy') }}
     environment: ${{ github.event.inputs.environment || github.ref_name }}
     steps:
       - name: Checkout
@@ -60,7 +59,6 @@ jobs:
       - name: Uninstall Helm release
         shell: bash
         run: |
-          # Determine environment from manual input or branch name
           if [ -n "${{ github.event.inputs.environment }}" ]; then
             ENV="${{ github.event.inputs.environment }}"
           else
@@ -76,7 +74,7 @@ jobs:
     needs: destroy-app
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.destroy_infra == 'true' }}
     runs-on: ubuntu-latest
-    environment: prod  # Infrastructure destruction always requires prod approval
+    environment: prod
     steps:
       - name: Checkout
         uses: actions/checkout@v4
