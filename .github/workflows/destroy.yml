@@ -1,6 +1,8 @@
 name: 3. Destroy
 
 on:
+  push:
+    branches: [ "dev", "test", "prod" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -21,11 +23,17 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: infra-provision
+  cancel-in-progress: false
+
 jobs:
   destroy-app:
     runs-on: ubuntu-latest
+    # Only run on push if commit message contains [destroy]
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[destroy]') }}
     # Even destroy requires approval for prod environment
-    environment: ${{ github.event.inputs.environment }}
+    environment: ${{ github.event.inputs.environment || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,7 +60,12 @@ jobs:
       - name: Uninstall Helm release
         shell: bash
         run: |
-          ENV="${{ github.event.inputs.environment }}"
+          # Determine environment from manual input or branch name
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="${GITHUB_REF##*/}"
+          fi
           NAMESPACE="banking-${ENV}"
           echo "Uninstalling banking-app from namespace: $NAMESPACE"
           helm uninstall banking-app -n "$NAMESPACE" --ignore-not-found || true
