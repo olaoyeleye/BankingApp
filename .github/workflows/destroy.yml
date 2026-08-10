@@ -1,6 +1,8 @@
 name: 3. Destroy
 
 on:
+  push:
+    branches: [ "dev", "test", "prod" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -28,8 +30,10 @@ concurrency:
 jobs:
   destroy-app:
     runs-on: ubuntu-latest
+    # Only run on push if commit message contains [destroy], always run on workflow_dispatch
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[destroy]') }}
     # Destroy requires approval for prod environment
-    environment: ${{ github.event.inputs.environment }}
+    environment: ${{ github.event.inputs.environment || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,7 +74,7 @@ jobs:
 
   destroy-infra:
     needs: destroy-app
-    if: ${{ github.event.inputs.destroy_infra == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.destroy_infra == 'true' }}
     runs-on: ubuntu-latest
     environment: prod  # Infrastructure destruction always requires prod approval
     steps:
