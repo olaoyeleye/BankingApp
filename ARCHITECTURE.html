@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BankingApp — Codebase Architecture & Environment Guide</title>
+<style>
+  :root { --primary: #1a365d; --accent: #2b6cb0; --bg: #f7fafc; --border: #e2e8f0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: #1a2020; line-height: 1.7; padding: 2rem; }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 2rem; color: var(--primary); border-bottom: 3px solid var(--accent); padding-bottom: .5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.5rem; color: var(--primary); margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.15rem; color: var(--accent); margin: 1.5rem 0 .75rem; }
+  p, li { margin-bottom: .5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  code { background: #edf2f7; padding: .15rem .4rem; border-radius: 4px; font-size: .9em; font-family: 'Consolas', monospace; }
+  pre { background: #1a2020; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; font-size: .85em; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9em; }
+  th { background: var(--primary); color: white; padding: .6rem .8rem; text-align: left; }
+  td { padding: .5rem .8rem; border: 1px solid var(--border); }
+  tr:nth-child(even) td { background: #edf2f7; }
+  .card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1rem 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .8em; font-weight: 600; }
+  .badge-green { background: #c6f6d5; color: #22543d; }
+  .badge-yellow { background: #fefcbf; color: #744210; }
+  .badge-red { background: #fed7d7; color: #822727; }
+  .badge-blue { background: #bee3f8; color: #2a4365; }
+  .flow-diagram { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; margin: 1.5rem 0; }
+  .flow-box { background: white; border: 2px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; text-align: center; font-weight: 600; font-size: .85em; }
+  .flow-arrow { font-size: 1.2rem; color: var(--accent); }
+  .note { background: #ebf8ff; border-left: 4px solid var(--accent); padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fffbeb; border-left: 4px solid #d69e2e; padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .85em; color: #718096; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>BankingApp — Architecture & Environment Guide</h1>
+
+<h2>1. Workflow Execution Order</h2>
+<div class="flow-diagram">
+  <div class="flow-box">1. Provision Infra<br><small>infra.yml (manual)</small></div>
+  <div class="flow-arrow">then</div>
+  <div class="flow-box">2. Deploy App<br><small>apply.yml (push)</small></div>
+  <div class="flow-arrow">or</div>
+  <div class="flow-box">3. Destroy<br><small>destroy.yml (manual)</small></div>
+</div>
+<p><strong>Step 1:</strong> Run <code>infra.yml</code> manually to create the EKS cluster (Terraform + Ansible).<br>
+<strong>Step 2:</strong> Push to <code>dev</code>/<code>test</code>/<code>prod</code> to deploy the application via Helm.<br>
+<strong>Step 3:</strong> Run <code>destroy.yml</code> manually to tear down an environment or infrastructure.</p>
+
+<h2>2. Environment Strategy</h2>
+<table>
+<tr><th>Branch</th><th>Environment</th><th>Namespace</th><th>Approval?</th></tr>
+<tr><td><code>dev</code></td><td>Development</td><td><code>banking-dev</code></td><td><span class="badge badge-green">No</span></td></tr>
+<tr><td><code>test</code></td><td>Test</td><td><code>banking-test</code></td><td><span class="badge badge-green">No</span></td></tr>
+<tr><td><code>prod</code></td><td>Production</td><td><code>banking-prod</code></td><td><span class="badge badge-red">Yes</span></td></tr>
+</table>
+
+<h2>3. Workflows</h2>
+<h3>1. Provision Infrastructure (<code>infra.yml</code>)</h3>
+<ul>
+  <li><strong>Trigger:</strong> Manual only</li>
+  <li>Terraform init, plan, apply — creates VPC, EKS, EC2, ECR, IAM</li>
+  <li>Configures Ansible inventory with EC2 public IP</li>
+  <li>Runs Ansible: installs kubectl, Helm, ingress-nginx, Datadog operator</li>
+  <li>Must run <strong>before</strong> deploying applications</li>
+</ul>
+
+<h3>2. Deploy Application (<code>apply.yml</code>)</h3>
+<ul>
+  <li><strong>Trigger:</strong> Push to <code>dev</code>/<code>test</code>/<code>prod</code>, or manual dispatch</li>
+  <li>Detects environment from branch name</li>
+  <li>Builds 5 Docker images, pushes to ECR</li>
+  <li>Deploys via <code>helm upgrade --install</code> with environment-specific values</li>
+  <li>Production requires GitHub Environment approval</li>
+</ul>
+
+<h3>3. Destroy (<code>destroy.yml</code>)</h3>
+<ul>
+  <li><strong>Trigger:</strong> Manual only</li>
+  <li>Uninstalls Helm release + deletes namespace for selected environment</li>
+  <li>Optional <code>destroy_infra</code> flag also runs <code>terraform destroy</code> (requires prod approval)</li>
+</ul>
+
+<h2>4. Helm Chart</h2>
+<p>Chart at <code>helm/banking-app/</code> with 12 templates. Values are layered:</p>
+<pre>helm upgrade --install banking-app ./helm/banking-app \
+  -f values.yaml -f values-{env}.yaml \
+  --set ecrRegistry=... --set imageTag=...</pre>
+
+<h2>5. Production Approval Setup</h2>
+<ol>
+  <li>GitHub Settings → Environments → New environment</li>
+  <li>Create <code>dev</code>, <code>test</code>, <code>prod</code></li>
+  <li>For <code>prod</code>: enable Required reviewers, add your team</li>
+  <li>Pushes to <code>prod</code> branch will pause until approved</li>
+</ol>
+
+<h2>6. Required Secrets</h2>
+<table>
+<tr><th>Secret</th><th>Description</th></tr>
+<tr><td><code>AWS_ACCESS_KEY_ID</code></td><td>AWS access key</td></tr>
+<tr><td><code>AWS_SECRET_ACCESS_KEY</code></td><td>AWS secret key</td></tr>
+<tr><td><code>AWS_REGION</code></td><td>AWS region</td></tr>
+<tr><td><code>VPC_NAME</code></td><td>Cluster name prefix</td></tr>
+<tr><td><code>AMI_ID</code></td><td>EC2 AMI ID</td></tr>
+<tr><td><code>INSTANCE_TYPE</code></td><td>EC2 instance type</td></tr>
+<tr><td><code>INSTANCE_NAME_NGINX</code></td><td>Nginx instance name</td></tr>
+<tr><td><code>KEY_NAME</code></td><td>SSH key pair name</td></tr>
+<tr><td><code>EKS_ADMIN_PRINCIPAL_ARN</code></td><td>EKS admin ARN</td></tr>
+<tr><td><code>ANSIBLE_SSH_PRIVATE_KEY</code></td><td>SSH private key</td></tr>
+</table>
+
+<h2>7. Developer Workflow</h2>
+<pre>git checkout dev && git push origin dev    # auto-deploys to dev
+git checkout test && git merge dev && git push origin test  # auto-deploys to test
+git checkout prod && git merge test && git push origin prod  # requires approval</pre>
+
+<div class="footer">BankingApp Architecture Guide | https://github.com/olaoyeleye/BankingApp</div>
+</div>
+</body>
+</html>

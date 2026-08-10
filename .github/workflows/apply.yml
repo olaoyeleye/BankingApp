@@ -133,6 +133,17 @@ jobs:
       - name: Install Helm
         shell: bash
         run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Verify EKS cluster exists
+        shell: bash
+        run: |
+          CLUSTER_NAME="${{ secrets.VPC_NAME }}-cluster"
+          REGION="${{ secrets.AWS_REGION }}"
+          echo "Checking for EKS cluster: $CLUSTER_NAME in $REGION"
+          if ! aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            echo "::error::EKS cluster not found. Run the '1. Provision Infrastructure' workflow first."
+            exit 1
+          fi
+          echo "Cluster found. Proceeding with deployment."
       - name: Update kubeconfig
         shell: bash
         run: aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-cluster" --region "${{ secrets.AWS_REGION }}"
