@@ -1,8 +1,6 @@
 name: 3. Destroy
 
 on:
-  push:
-    branches: [ "dev", "test", "prod" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -17,7 +15,7 @@ on:
         description: "Also destroy shared infrastructure (EKS, VPC, EC2)?"
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -30,10 +28,8 @@ concurrency:
 jobs:
   destroy-app:
     runs-on: ubuntu-latest
-    # Only run on push if commit message contains [destroy]
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[destroy]') }}
-    # Even destroy requires approval for prod environment
-    environment: ${{ github.event.inputs.environment || github.ref_name }}
+    # Destroy requires approval for prod environment
+    environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
