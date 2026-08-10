@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: banking-ingress-nginx
-  namespace: banking
+  namespace: __NAMESPACE__
   annotations:
     # cert-manager.io/cluster-issuer: "letsencrypt-prod" 
     nginx.ingress.kubernetes.io/enable-cors: "true"

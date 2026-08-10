@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ include "banking-app.namespace" . }}
+  labels:
+    app: redis
+spec:
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "{{ .Values.redis.resources.requests.memory }}"
+            cpu: "{{ .Values.redis.resources.requests.cpu }}"
+          limits:
+            memory: "{{ .Values.redis.resources.limits.memory }}"
+            cpu: "{{ .Values.redis.resources.limits.cpu }}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: {{ include "banking-app.namespace" . }}
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: {{ .Values.redis.service.port }}
+    targetPort: 6379
+  type: ClusterIP

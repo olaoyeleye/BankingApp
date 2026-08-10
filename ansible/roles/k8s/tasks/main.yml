@@ -159,27 +159,8 @@
     group: ec2-user
     mode: "0755"
 
-- name: Copy k8s manifests to EC2
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../k8s/{{ item }}"
-    dest: "/home/ec2-user/k8s/{{ item }}"
-    owner: ec2-user
-    group: ec2-user
-    mode: "0644"
-  loop:
-    - namespace.yml
-    - secret.yml
-    - configmap.yml
-    - storageclass.yml
-    - postgres.yml
-    - redis.yml
-    - kafka.yml
-    - user-service.yml
-    - transaction-service.yml
-    - activity-service.yml
-    - ingress.yml
-    - datadog-agent.yml
-
+# NOTE: Application manifests are now deployed via Helm in the GitHub Actions
+# workflow (apply.yml). Ansible only sets up shared cluster infrastructure.
 
 - name: Add Datadog Helm repo.
   ansible.builtin.command: helm repo add datadog https://helm.datadoghq.com
@@ -228,91 +209,8 @@
     AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
 
 
-- name: Set app image in user-service.yml.
-  ansible.builtin.replace:
-    path: /home/ec2-user/k8s/user-service.yml
-    regexp: 'YOUR_ECR_URL/user-service:latest'
-    replace: "{{ user_service_image }}"
-
-- name: Set app image in transaction-service.yml
-  ansible.builtin.replace:
-    path: /home/ec2-user/k8s/transaction-service.yml
-    regexp: 'YOUR_ECR_URL/transaction-service:latest'
-    replace: "{{ transaction_service_image }}"
-
-- name: Set app image in activity-service.yml
-  ansible.builtin.replace:
-    path: /home/ec2-user/k8s/activity-service.yml
-    regexp: 'YOUR_ECR_URL/activity-service:latest'
-    replace: "{{ activity_service_image }}"
-
-- name: Set app image in postgres.yml
-  ansible.builtin.replace:
-    path: /home/ec2-user/k8s/postgres.yml
-    regexp: 'YOUR_ECR_URL/bank-app-postgres:latest'
-    replace: "{{ postgres_image }}"
-    
-- name: Fix StorageClass
-  ansible.builtin.shell: |
-    kubectl delete storageclass gp2 --ignore-not-found=true
-    sleep 5
-    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
-    kubectl get storageclass
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-  register: sc_fix
-
-- name: Clean up old banking namespace
-  ansible.builtin.shell: kubectl delete namespace banking --ignore-not-found=true
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-
-- name: Apply infrastructure
-  ansible.builtin.shell: |
-    kubectl apply -f /home/ec2-user/k8s/namespace.yml
-    kubectl apply -f /home/ec2-user/k8s/secret.yml
-    kubectl apply -f /home/ec2-user/k8s/configmap.yml
-    kubectl apply -f /home/ec2-user/k8s/postgres.yml
-    kubectl apply -f /home/ec2-user/k8s/redis.yml
-    kubectl apply -f /home/ec2-user/k8s/kafka.yml
-    kubectl apply -f /home/ec2-user/k8s/datadog-agent.yml
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-
-- name: Apply app services
-  ansible.builtin.shell: |
-    kubectl apply -f /home/ec2-user/k8s/user-service.yml
-    kubectl apply -f /home/ec2-user/k8s/transaction-service.yml
-    kubectl apply -f /home/ec2-user/k8s/activity-service.yml
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-
-- name: Apply ingress resource
-  ansible.builtin.shell: kubectl apply -f /home/ec2-user/k8s/ingress.yml
-  become_user: ec2-user
-  environment:
-    HOME: /home/ec2-user
-    KUBECONFIG: /home/ec2-user/.kube/config
-    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
-    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
+# Application deployment is now handled by Helm in the GitHub Actions
+# workflow (apply.yml). The Ansible role only sets up:
+# - EC2 instance tooling (AWS CLI, kubectl, Helm)
+# - EKS kubeconfig
+# - Shared cluster infra (ingress-nginx, Datadog operator)

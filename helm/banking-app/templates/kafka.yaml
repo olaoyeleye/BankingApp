@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: {{ include "banking-app.namespace" . }}
+  labels:
+    app: kafka
+spec:
+  replicas: {{ .Values.kafka.replicas }}
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: "{{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}"
+        ports:
+        - containerPort: 9092
+        - containerPort: 9101
+        - containerPort: 29092
+        - containerPort: 29093
+        resources:
+          requests:
+            memory: "{{ .Values.kafka.resources.requests.memory }}"
+            cpu: "{{ .Values.kafka.resources.requests.cpu }}"
+          limits:
+            memory: "{{ .Values.kafka.resources.limits.memory }}"
+            cpu: "{{ .Values.kafka.resources.limits.cpu }}"
+        envFrom:
+        - configMapRef:
+            name: banking-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: {{ include "banking-app.namespace" . }}
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: plaintext
+      port: {{ .Values.kafka.service.ports.plaintext }}
+      targetPort: 29092
+    - name: external
+      port: {{ .Values.kafka.service.ports.external }}
+      targetPort: 9092
+    - name: jmx
+      port: {{ .Values.kafka.service.ports.jmx }}
+      targetPort: 9101
+    - name: controller
+      port: {{ .Values.kafka.service.ports.controller }}
+      targetPort: 29093
+  type: ClusterIP

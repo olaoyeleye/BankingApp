@@ -1,0 +1,121 @@
+name: Infrastructure (Terraform)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - test
+          - dev
+          - prod
+      terraform_action:
+        description: "Terraform action"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-infra:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set environment config
+        id: config
+        shell: bash
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+          echo "namespace=banking-$ENV" >> "$GITHUB_OUTPUT"
+          echo "Managing infrastructure for environment: $ENV"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Create terraform.tfvars
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          cat > terraform.tfvars <<EOF
+          region              = "${{ secrets.AWS_REGION }}"
+          ami                 = "${{ secrets.AMI_ID }}"
+          instance_type       = "${{ secrets.INSTANCE_TYPE }}"
+          instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
+          vpc_name            = "${{ secrets.VPC_NAME }}"
+          key_name            = "${{ secrets.KEY_NAME }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -reconfigure
+
+      - name: Delete EKS node groups first (for destroy)
+        if: github.event.inputs.terraform_action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLUSTER_NAME="${{ secrets.VPC_NAME }}-cluster"
+          REGION="${{ secrets.AWS_REGION }}"
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "$REGION" --query 'nodegroups[]' --output text)
+            if [ -n "${NODEGROUPS// /}" ]; then
+              for NG in $NODEGROUPS; do
+                aws eks delete-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
+                aws eks wait nodegroup-deleted --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
+              done
+            fi
+          fi
+
+      - name: Terraform Destroy
+        if: github.event.inputs.terraform_action == 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          helm uninstall ingress-nginx -n ingress-nginx 2>/dev/null || true
+          terraform state rm helm_release.ingress_nginx 2>/dev/null || true
+          terraform state rm kubernetes_namespace_v1.banking 2>/dev/null || true
+          terraform state rm aws_eks_node_group.main 2>/dev/null || true
+          terraform destroy -auto-approve
+
+      - name: Terraform Plan
+        if: github.event.inputs.terraform_action != 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: github.event.inputs.terraform_action != 'destroy'
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Upload terraform outputs
+        if: github.event.inputs.terraform_action != 'destroy'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: terraform/

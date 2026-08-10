@@ -1,0 +1,168 @@
+# Default values for banking-app Helm chart
+# These are overridden by per-environment values files (values-dev.yaml, values-test.yaml, values-prod.yaml)
+
+# Shared settings (overridden by --set in CI)
+ecrRegistry: ""
+imageTag: "latest"
+
+# Default environment
+environment: dev
+
+# Frontend
+frontend:
+  enabled: true
+  replicas: 1
+  image:
+    repository: bank-app-frontend
+  service:
+    port: 80
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+
+# User Service
+userService:
+  replicas: 1
+  image:
+    repository: bank-app-user-service
+  service:
+    port: 8000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+
+# Transaction Service
+transactionService:
+  replicas: 1
+  image:
+    repository: bank-app-transaction-service
+  service:
+    port: 8080
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+# Activity Service
+activityService:
+  replicas: 1
+  image:
+    repository: bank-app-activity-service
+  service:
+    port: 8001
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "25m"
+    limits:
+      memory: "256Mi"
+      cpu: "50m"
+
+# Postgres
+postgres:
+  replicas: 1
+  image:
+    repository: bank-app-postgres
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    storageClassName: gp2
+    size: 5Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Redis
+redis:
+  replicas: 1
+  image:
+    repository: redis
+    tag: "7-alpine"
+  service:
+    port: 6379
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
+    limits:
+      memory: "64Mi"
+      cpu: "50m"
+
+# Kafka
+kafka:
+  replicas: 1
+  image:
+    repository: confluentinc/cp-kafka
+    tag: "7.5.0"
+  service:
+    ports:
+      plaintext: 29092
+      external: 9092
+      jmx: 9101
+      controller: 29093
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "250m"
+
+# Ingress
+ingress:
+  enabled: true
+  className: nginx
+  host: ""
+  tls:
+    enabled: false
+    secretName: ""
+  cors:
+    allowOrigin: "*"
+    allowMethods: "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    allowHeaders: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    allowCredentials: "true"
+
+# Secrets (override with GitHub secrets in CI or sealed-secrets in production)
+secrets:
+  postgresDb: bankingdb
+  postgresUser: bankuser
+  postgresPassword: bankpass
+  databaseUrl: "postgresql://bankuser:bankpass@postgres-service:5432/bankingdb"
+  springDatasourceUrl: "jdbc:postgresql://postgres-service:5432/bankingdb"
+  springDatasourceUsername: bankuser
+  springDatasourcePassword: bankpass
+  nodeEnv: development
+
+# ConfigMap
+configmap:
+  springJpaHibernateDdlAuto: "update"
+  frontendOrigin: "https://placeholder.elb.amazonaws.com"
+  bankFrontend: "https://placeholder.elb.amazonaws.com"
+  kafkaBootstrapServers: "kafka-service:29092"
+  kafkaTopic: "activities"
+  redisHost: "redis-service"
+  redisPort: "6379"
+  postgresHost: "postgres-service"
+  postgresPort: "5432"
+
+# Datadog
+datadog:
+  enabled: false
+  apiKey: ""
+  appKey: ""

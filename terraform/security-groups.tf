@@ -1,11 +1,10 @@
 resource "aws_security_group" "public_kunle_sg" {
-  name        = "${var.vpc_name}-${var.environment}-nodes-sg"
+  name        = "${var.vpc_name}-nodes-sg"
   description = "Security group for EKS nodes and public access where required"
   vpc_id      = aws_vpc.vpc.id
 
   tags = {
-    Name        = "${var.vpc_name}-${var.environment}-nodes-sg"
-    Environment = var.environment
+    Name = "${var.vpc_name}-nodes-sg"
   }
 }
 
@@ -40,13 +39,12 @@ resource "aws_vpc_security_group_egress_rule" "allow_all_public_traffic" {
 }
 
 resource "aws_security_group" "database_sg" {
-  name        = "${var.vpc_name}-${var.environment}-database-sg"
+  name        = "${var.vpc_name}-database-sg"
   description = "Security group for in-cluster or external database access"
   vpc_id      = aws_vpc.vpc.id
 
   tags = {
-    Name        = "${var.vpc_name}-${var.environment}-database-sg"
-    Environment = var.environment
+    Name = "${var.vpc_name}-database-sg"
   }
 }
 

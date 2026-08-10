@@ -1,0 +1,441 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BankingApp — Codebase Architecture & Environment Guide</title>
+<style>
+  :root { --primary: #1a365d; --accent: #2b6cb0; --bg: #f7fafc; --border: #e2e8f0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: #1a2020; line-height: 1.7; padding: 2rem; }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 2rem; color: var(--primary); border-bottom: 3px solid var(--accent); padding-bottom: .5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.5rem; color: var(--primary); margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.15rem; color: var(--accent); margin: 1.5rem 0 .75rem; }
+  h4 { font-size: 1rem; color: #2d3748; margin: 1rem 0 .5rem; }
+  p, li { margin-bottom: .5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  code { background: #edf2f7; padding: .15rem .4rem; border-radius: 4px; font-size: .9em; font-family: 'Consolas', 'Courier New', monospace; }
+  pre { background: #1a2020; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; font-size: .85em; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9em; }
+  th { background: var(--primary); color: white; padding: .6rem .8rem; text-align: left; }
+  td { padding: .5rem .8rem; border: 1px solid var(--border); }
+  tr:nth-child(even) td { background: #edf2f7; }
+  .card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1rem 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h3 { margin-top: 0; }
+  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .8em; font-weight: 600; }
+  .badge-green { background: #c6f6d5; color: #22543d; }
+  .badge-yellow { background: #fefcbf; color: #744210; }
+  .badge-red { background: #fed7d7; color: #822727; }
+  .badge-blue { background: #bee3f8; color: #2a4365; }
+  .flow-diagram { display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; margin: 1.5rem 0; }
+  .flow-box { background: white; border: 2px solid var(--accent); border-radius: 8px; padding: .6rem 1rem; text-align: center; font-weight: 600; font-size: .85em; }
+  .flow-arrow { font-size: 1.2rem; color: var(--accent); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  .note { background: #ebf8ff; border-left: 4px solid var(--accent); padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .warn { background: #fffbeb; border-left: 4px solid #d69e2e; padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .85em; color: #718096; text-align: center; }
+  @media print { body { padding: 1rem; } .card { box-shadow: none; break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🏦 BankingApp — Codebase Architecture & Environment Guide</h1>
+<p>This document provides a complete reference for the Global Banking Application codebase: its architecture, multi-environment CI/CD strategy, infrastructure provisioning, Kubernetes deployments, and developer workflows.</p>
+
+<!-- ============================================================ -->
+<h2>1. High-Level Architecture</h2>
+
+<div class="flow-diagram">
+  <div class="flow-box">Developer<br>Push</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">GitHub<br>Branch</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">GitHub<br>Actions</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Docker<br>Build + ECR</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Helm<br>Deploy</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">EKS<br>Namespace</div>
+</div>
+
+<p>The application runs on a <strong>shared AWS EKS cluster</strong> with three Kubernetes namespaces providing environment isolation:</p>
+
+<table>
+<tr><th>Branch</th><th>Environment</th><th>K8s Namespace</th><th>Approval?</th></tr>
+<tr><td><code>dev</code></td><td>Development</td><td><code>banking-dev</code></td><td><span class="badge badge-green">No</span></td></tr>
+<tr><td><code>test</code></td><td>Test / QA</td><td><code>banking-test</code></td><td><span class="badge badge-green">No</span></td></tr>
+<tr><td><code>prod</code></td><td>Production</td><td><code>banking-prod</code></td><td><span class="badge badge-red">Yes — Required</span></td></tr>
+</table>
+
+<div class="note">
+  <strong>Key Design Decision:</strong> A single EKS cluster with namespace-based isolation (instead of 3 separate clusters) keeps AWS costs low while providing full environment separation via Kubernetes RBAC, resource quotas, and network policies.
+</div>
+
+<!-- ============================================================ -->
+<h2>2. Application Components</h2>
+
+<div class="two-col">
+<div class="card">
+  <h3>🖥️ Frontend</h3>
+  <p>React + Vite + Tailwind CSS served by Nginx in Docker.</p>
+  <ul>
+    <li>Path: <code>techbleat-global-bank-frontend/</code></li>
+    <li>Image: <code>bank-app-frontend</code></li>
+    <li>Port: 80</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>👤 User Service</h3>
+  <p>Python FastAPI service for user management and authentication.</p>
+  <ul>
+    <li>Path: <code>techbleat-global-bank-backend/user-service/</code></li>
+    <li>Image: <code>bank-app-user-service</code></li>
+    <li>Port: 8000</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>💰 Transaction Service</h3>
+  <p>Java Spring Boot service for banking transactions.</p>
+  <ul>
+    <li>Path: <code>techbleat-global-bank-backend/transaction-service/</code></li>
+    <li>Image: <code>bank-app-transaction-service</code></li>
+    <li>Port: 8080</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>📋 Activity Service</h3>
+  <p>Python FastAPI service for activity logging via Kafka.</p>
+  <ul>
+    <li>Path: <code>techbleat-global-bank-backend/activity-service/</code></li>
+    <li>Image: <code>bank-app-activity-service</code></li>
+    <li>Port: 8001</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>🐘 PostgreSQL</h3>
+  <p>Primary database with custom init scripts.</p>
+  <ul>
+    <li>Image: <code>bank-app-postgres</code> (includes <code>db-init/</code>)</li>
+    <li>Port: 5432</li>
+    <li>Persistence: EBS via gp2 StorageClass</li>
+  </ul>
+</div>
+<div class="card">
+  <h3>⚡ Redis + 📨 Kafka</h3>
+  <p>Redis for caching; Kafka for async event streaming.</p>
+  <ul>
+    <li>Redis: port 6379</li>
+    <li>Kafka: ports 29092 / 9092</li>
+  </ul>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Directory Structure</h2>
+
+<pre><code>BankingApp/
+├── .github/workflows/        # CI/CD pipelines
+│   ├── apply.yml             # App build + Helm deploy (branch-triggered)
+│   ├── infra.yml             # Terraform infra (manual only)
+│   └── destroy.yml           # App/env destroy (manual only)
+├── terraform/                # Shared infrastructure (EKS, VPC, EC2, ECR)
+├── ansible/                  # EC2 configuration (Nginx, kubectl, Helm, Datadog)
+├── helm/banking-app/         # Helm chart for K8s deployments
+│   ├── Chart.yaml
+│   ├── values.yaml           # Base defaults
+│   ├── values-dev.yaml       # Dev overrides
+│   ├── values-test.yaml      # Test overrides
+│   ├── values-prod.yaml      # Prod overrides
+│   └── templates/            # 12 K8s manifest templates
+├── k8s/                      # Original K8s manifests (reference only)
+│   └── envs/                 # Per-environment resource configs
+├── techbleat-global-bank-backend/   # Backend services
+│   ├── user-service/
+│   ├── transaction-service/
+│   ├── activity-service/
+│   └── db-init/
+├── techbleat-global-bank-frontend/  # React frontend
+├── ENVIRONMENTS.md           # Environment setup guide
+└── README.md
+</code></pre>
+
+<!-- ============================================================ -->
+<h2>4. Infrastructure Layer (Terraform)</h2>
+
+<p>Terraform provisions the <strong>shared, environment-agnostic</strong> infrastructure:</p>
+
+<div class="card">
+<h3>Resources Created</h3>
+<table>
+<tr><th>Resource</th><th>Description</th></tr>
+<tr><td>VPC</td><td>Custom VPC with public/private subnets across 2 AZs</td></tr>
+<tr><td>EKS Cluster</td><td>Single Kubernetes cluster (v1.30) shared by all environments</td></tr>
+<tr><td>EKS Node Group</td><td>Managed node group (t3.medium) for workloads</td></tr>
+<tr><td>EC2 (Nginx)</td><td>Bastion/proxy instance for kubeconfig and Datadog</td></tr>
+<tr><td>ECR Repos</td><td>5 Elastic Container Repositories for app images</td></tr>
+<tr><td>Security Groups</td><td>Cluster, node, and Nginx instance security groups</td></tr>
+<tr><td>IAM Roles</td><td>EKS cluster role, node role, ALB controller role</td></tr>
+<tr><td>S3 Backend</td><td>Remote Terraform state in S3 + DynamoDB locking</td></tr>
+</table>
+</div>
+
+<div class="note">
+  Terraform is <strong>NOT</strong> run per environment. It's run once via the manual <code>infra.yml</code> workflow to create shared infrastructure. Environments are then deployed as separate namespaces via Helm.
+</div>
+
+<!-- ============================================================ -->
+<h2>5. CI/CD Workflows</h2>
+
+<h3>5.1 <code>apply.yml</code> — Application Deployment</h3>
+
+<div class="flow-diagram">
+  <div class="flow-box">Push to<br>dev/test/prod</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Set<br>Environment</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Build &<br>Push Images</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Helm<br>Deploy</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Sync to<br>EC2</div>
+</div>
+
+<table>
+<tr><th>Step</th><th>Job</th><th>Description</th></tr>
+<tr><td>1</td><td><code>set-environment</code></td><td>Detects environment from branch name (e.g., push to <code>prod</code> → env=prod)</td></tr>
+<tr><td>2</td><td><code>build-images</code></td><td>Builds 5 Docker images, pushes to ECR with both <code>sha</code> and <code>latest</code> tags</td></tr>
+<tr><td>3</td><td><code>deploy-helm</code></td><td>Runs <code>helm upgrade --install</code> with base + environment-specific values</td></tr>
+<tr><td>4</td><td><code>sync-ec2</code></td><td>rsyncs the repo to the EC2 Nginx instance for reference</td></tr>
+</table>
+
+<div class="warn">
+  <strong>Production Approval:</strong> The <code>build-images</code> and <code>deploy-helm</code> jobs both specify <code>environment: ${{ needs.set-environment.outputs.environment }}</code>. When this resolves to <code>prod</code>, GitHub requires reviewer approval before the job runs. This is configured in <strong>GitHub → Settings → Environments → prod → Required reviewers</strong>.
+</div>
+
+<h3>5.2 <code>infra.yml</code> — Infrastructure Management</h3>
+<p>Manual-only workflow (<code>workflow_dispatch</code>). Runs Terraform init/plan/apply for the shared EKS cluster. Also runs Ansible to configure the EC2 Nginx instance.</p>
+
+<h3>5.3 <code>destroy.yml</code> — Teardown</h3>
+<p>Manual workflow with two options:</p>
+<ul>
+  <li><strong>App only</strong> (default): Uninstalls Helm release + deletes namespace for the selected environment</li>
+  <li><strong>App + Infra</strong> (<code>destroy_infra=true</code>): Also runs <code>terraform destroy</code> to remove the entire cluster (requires <code>prod</code> environment approval)</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>6. Helm Chart</h2>
+
+<p>The Helm chart at <code>helm/banking-app/</code> is the single source of truth for all Kubernetes deployments. It parameterises everything by environment.</p>
+
+<h3>6.1 Templates</h3>
+<table>
+<tr><th>Template</th><th>Creates</th></tr>
+<tr><td><code>namespace.yaml</code></td><td>Namespace <code>banking-{env}</code></td></tr>
+<tr><td><code>configmap.yaml</code></td><td>Application config (DB host, Kafka, Redis, CORS origins)</td></tr>
+<tr><td><code>secret.yaml</code></td><td>DB credentials, JDBC URL, node environment</td></tr>
+<tr><td><code>postgres.yaml</code></td><td>Postgres StatefulSet + Service + PVC + init SQL ConfigMap</td></tr>
+<tr><td><code>redis.yaml</code></td><td>Redis Deployment + Service</td></tr>
+<tr><td><code>kafka.yaml</code></td><td>Kafka Deployment + Service (4 ports)</td></tr>
+<tr><td><code>user-service.yaml</code></td><td>User Service Deployment + Service</td></tr>
+<tr><td><code>transaction-service.yaml</code></td><td>Transaction Service Deployment + Service</td></tr>
+<tr><td><code>activity-service.yaml</code></td><td>Activity Service Deployment + Service</td></tr>
+<tr><td><code>frontend.yaml</code></td><td>Frontend Deployment + Service</td></tr>
+<tr><td><code>ingress.yaml</code></td><td>Nginx Ingress with CORS annotations + optional TLS</td></tr>
+<tr><td><code>_helpers.tpl</code></td><td>Template helpers: namespace, labels, image ref</td></tr>
+</table>
+
+<h3>6.2 Values Layering</h3>
+<pre><code>helm upgrade --install banking-app ./helm/banking-app \
+  --namespace banking-{env} \
+  -f values.yaml \              # base defaults
+  -f values-{env}.yaml \        # environment overrides
+  --set ecrRegistry=... \       # from CI
+  --set imageTag=...            # git SHA
+</code></pre>
+
+<h3>6.3 Environment Differences</h3>
+<table>
+<tr><th>Setting</th><th>Dev</th><th>Test</th><th>Prod</th></tr>
+<tr><td>App replicas</td><td>1</td><td>2</td><td>3</td></tr>
+<tr><td>Frontend CPU</td><td>50m / 100m</td><td>100m / 200m</td><td>150m / 200m</td></tr>
+<tr><td>Frontend memory</td><td>128Mi / 256Mi</td><td>256Mi / 512Mi</td><td>256Mi / 512Mi</td></tr>
+<tr><td>Postgres storage</td><td>5Gi</td><td>10Gi</td><td>20Gi</td></tr>
+<tr><td>Postgres CPU</td><td>100m / 250m</td><td>250m / 500m</td><td>500m / 1000m</td></tr>
+<tr><td>Kafka memory</td><td>512Mi / 1Gi</td><td>768Mi / 1.5Gi</td><td>1Gi / 2Gi</td></tr>
+<tr><td>TLS</td><td><span class="badge badge-yellow">Off</span></td><td><span class="badge badge-yellow">Off</span></td><td><span class="badge badge-green">On</span></td></tr>
+<tr><td>Ingress host</td><td>ALB hostname</td><td>ALB hostname</td><td>bank.yourdomain.com</td></tr>
+<tr><td>Datadog</td><td><span class="badge badge-yellow">Off</span></td><td><span class="badge badge-green">On</span></td><td><span class="badge badge-green">On</span></td></tr>
+<tr><td>Hibernate DDL</td><td>update</td><td>update</td><td><span class="badge badge-red">none</span></td></tr>
+<tr><td>NODE_ENV</td><td>development</td><td>test</td><td><span class="badge badge-blue">production</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>7. Ansible</h2>
+
+<p>Ansible runs after Terraform to configure the EC2 Nginx instance. It <strong>no longer</strong> deploys application manifests (that's handled by Helm in CI).</p>
+
+<h3>What Ansible Does</h3>
+<ol>
+  <li>Installs required packages (curl, git, unzip)</li>
+  <li>Installs AWS CLI v2</li>
+  <li>Installs kubectl (latest stable)</li>
+  <li>Installs Helm 3</li>
+  <li>Configures kubeconfig for EKS</li>
+  <li>Verifies cluster access</li>
+  <li>Installs <strong>ingress-nginx</strong> controller via Helm</li>
+  <li>Installs <strong>Datadog Operator</strong> via Helm</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2>8. Production Approval Setup</h2>
+
+<p>The approval mechanism uses <strong>GitHub Environments</strong> — no custom code needed.</p>
+
+<h3>Step-by-Step Configuration</h3>
+<ol>
+  <li>Navigate to your repository on GitHub</li>
+  <li>Go to <strong>Settings → Environments</strong></li>
+  <li>Click <strong>New environment</strong> and create:
+    <ul>
+      <li><code>dev</code> — no protection rules</li>
+      <li><code>test</code> — no protection rules</li>
+      <li><code>prod</code> — enable <strong>Required reviewers</strong> and add your team</li>
+    </ul>
+  </li>
+  <li>Optionally add <strong>Deployment branches</strong> rule to <code>prod</code> to restrict to the <code>prod</code> branch only</li>
+</ol>
+
+<div class="note">
+  When a developer pushes to the <code>prod</code> branch, the workflow starts but the <code>build-images</code> job enters a "Waiting" state. Designated reviewers receive a notification and must click <strong>"Approve and run"</strong> before any build or deployment happens. Dev and test branches deploy automatically with no approval.
+</div>
+
+<!-- ============================================================ -->
+<h2>9. Required GitHub Secrets</h2>
+
+<table>
+<tr><th>Secret</th><th>Description</th><th>Example</th></tr>
+<tr><td><code>AWS_ACCESS_KEY_ID</code></td><td>AWS IAM access key</td><td>AKIA...</td></tr>
+<tr><td><code>AWS_SECRET_ACCESS_KEY</code></td><td>AWS IAM secret key</td><td>wJalrXU...</td></tr>
+<tr><td><code>AWS_REGION</code></td><td>AWS region</td><td>us-east-1</td></tr>
+<tr><td><code>AWS_ACCOUNT_ID</code></td><td>12-digit AWS account ID</td><td>123456789012</td></tr>
+<tr><td><code>VPC_NAME</code></td><td>Prefix for cluster/instance names</td><td>banking-app</td></tr>
+<tr><td><code>AMI_ID</code></td><td>EC2 AMI for Nginx instance</td><td>ami-0c7...</td></tr>
+<tr><td><code>INSTANCE_TYPE</code></td><td>EC2 instance type</td><td>t3.medium</td></tr>
+<tr><td><code>INSTANCE_NAME_NGINX</code></td><td>Nginx EC2 instance name</td><td>banking-nginx</td></tr>
+<tr><td><code>KEY_NAME</code></td><td>SSH key pair name</td><td>banking-key</td></tr>
+<tr><td><code>EKS_ADMIN_PRINCIPAL_ARN</code></td><td>EKS admin IAM principal ARN</td><td>arn:aws:iam::...</td></tr>
+<tr><td><code>ANSIBLE_SSH_PRIVATE_KEY</code></td><td>SSH private key for Ansible</td><td>-----BEGIN RSA...</td></tr>
+<tr><td><code>DATADOG_API</code></td><td>Datadog API key (optional)</td><td>dd1234...</td></tr>
+<tr><td><code>DATADOG_APP</code></td><td>Datadog app key (optional)</td><td>dd5678...</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>10. Developer Workflow</h2>
+
+<h3>Deploying to Dev</h3>
+<pre><code>git checkout dev
+# make changes...
+git add .
+git commit -m "feat: add new transaction filter"
+git push origin dev
+# → GitHub Actions auto-deploys to banking-dev namespace
+</code></pre>
+
+<h3>Deploying to Test</h3>
+<pre><code>git checkout test
+git merge dev
+git push origin test
+# → GitHub Actions auto-deploys to banking-test namespace
+</code></pre>
+
+<h3>Deploying to Production</h3>
+<pre><code>git checkout prod
+git merge test
+git push origin prod
+# → GitHub Actions pauses, reviewer approval required
+# → After approval: deploys to banking-prod namespace
+</code></pre>
+
+<h3>Destroying an Environment</h3>
+<pre><code># Go to GitHub → Actions → Destroy → Run workflow
+# Select environment: dev / test / prod
+# Optionally check "Also destroy shared infrastructure"
+</code></pre>
+
+<!-- ============================================================ -->
+<h2>11. Kubernetes In-Cluster Request Flow</h2>
+
+<div class="flow-diagram">
+  <div class="flow-box">User<br>Browser</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">AWS ALB<br>(Ingress)</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">ingress-nginx<br>Controller</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Frontend<br>(Nginx :80)</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-box">Backend<br>Services</div>
+</div>
+
+<p>Within the cluster:</p>
+<ul>
+  <li><strong>Frontend</strong> calls <strong>User Service</strong> (:8000) and <strong>Transaction Service</strong> (:8080)</li>
+  <li><strong>Transaction Service</strong> publishes events to <strong>Kafka</strong> (:29092)</li>
+  <li><strong>Activity Service</strong> (:8001) consumes from Kafka</li>
+  <li>Services cache sessions in <strong>Redis</strong> (:6379)</li>
+  <li>All services read/write from <strong>PostgreSQL</strong> (:5432)</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>12. Monitoring & Observability</h2>
+
+<div class="card">
+<h3>Datadog (Test & Prod only)</h3>
+<p>Datadog Operator is installed via Ansible on the EC2 instance. In test and prod, the Helm values enable Datadog agents which provide:</p>
+<ul>
+  <li>Infrastructure metrics (CPU, memory, network)</li>
+  <li>APM / Distributed tracing for Java and Python services</li>
+  <li>Log collection from all pods</li>
+  <li>Kubernetes cluster orchestrator explorer</li>
+</div>
+
+<!-- ============================================================ -->
+<h2>13. Security Considerations</h2>
+
+<ul>
+  <li><strong>Namespace isolation</strong>: Each environment runs in its own K8s namespace with separate secrets and configmaps</li>
+  <li><strong>Image tagging</strong>: Production deploys use git SHA tags (not <code>latest</code>) for immutability</li>
+  <li><strong>Hibernate DDL</strong>: Set to <code>none</code> in prod to prevent automatic schema changes</li>
+  <li><strong>TLS</strong>: Production ingress uses TLS with a cert-manager or pre-provisioned secret</li>
+  <li><strong>Secrets</strong>: Production DB credentials should be set via GitHub Environment secrets (not in values files)</li>
+  <li><strong>Approval gates</strong>: Production deployments and infrastructure destruction both require explicit human approval</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>14. Quick Start Checklist</h2>
+
+<ol>
+  <li>☐ Create GitHub Environments: <code>dev</code>, <code>test</code>, <code>prod</code></li>
+  <li>☐ Add <strong>Required reviewers</strong> to the <code>prod</code> environment</li>
+  <li>☐ Add all GitHub Secrets (see Section 9)</li>
+  <li>☐ Run <code>infra.yml</code> workflow manually to provision EKS cluster</li>
+  <li>☐ Push to <code>dev</code> branch to deploy the app</li>
+  <li>☐ Verify deployment: <code>kubectl get pods -n banking-dev</code></li>
+  <li>☐ Push to <code>test</code> branch to deploy to test</li>
+  <li>☐ Push to <code>prod</code> branch → approve in GitHub → production deployed</li>
+</ol>
+
+<div class="footer">
+  BankingApp Architecture Guide — Generated 2026-08-10<br>
+  Repository: https://github.com/olaoyeleye/BankingApp
+</div>
+
+</div>
+</body>
+</html>
+]]>

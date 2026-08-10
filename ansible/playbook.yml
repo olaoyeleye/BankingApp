@@ -1,9 +1,11 @@
-- name: Configure Nginx instance and deploy Kubernetes resources
+---
+- name: Configure Nginx instance and shared cluster infrastructure
   hosts: nginx
   become: true
   vars:
-    kubeconfig_path: /root/.kube/config
-    app_image: my-image
+    kubeconfig_path: /home/ec2-user/.kube/config
+    environment: "{{ target_environment | default('dev') }}"
+    namespace: "banking-{{ environment }}"
   roles:
   - nginx
   - k8s

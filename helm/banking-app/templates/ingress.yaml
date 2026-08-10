@@ -1,0 +1,60 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: banking-ingress-nginx
+  namespace: {{ include "banking-app.namespace" . }}
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "{{ .Values.ingress.cors.allowOrigin }}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "{{ .Values.ingress.cors.allowMethods }}"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "{{ .Values.ingress.cors.allowHeaders }}"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "{{ .Values.ingress.cors.allowCredentials }}"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+  {{- if .Values.ingress.host }}
+  - host: {{ .Values.ingress.host }}
+    http:
+  {{- else }}
+  - http:
+  {{- end }}
+      paths:
+        - path: /users
+          pathType: Prefix
+          backend:
+            service:
+              name: user-service
+              port:
+                number: {{ .Values.userService.service.port }}
+        - path: /transactions
+          pathType: Prefix
+          backend:
+            service:
+              name: transaction-service
+              port:
+                number: {{ .Values.transactionService.service.port }}
+        - path: /activities
+          pathType: Prefix
+          backend:
+            service:
+              name: activity-service
+              port:
+                number: {{ .Values.activityService.service.port }}
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: bank-frontend
+              port:
+                number: {{ .Values.frontend.service.port }}
+{{- end }}

@@ -1,0 +1,436 @@
+---
+# - name: Ensure required packages are installed
+#   ansible.builtin.dnf:
+#     name:
+#       - unzip
+#       - git
+#       - curl
+#     state: present
+- name: Ensure required packages are installed
+  ansible.builtin.shell: |
+    dnf install -y --allowerasing curl git unzip
+  changed_when: false
+
+- name: Install AWS CLI v2
+  ansible.builtin.shell: |
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+    unzip -o /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install --update
+  args:
+    creates: /usr/local/bin/aws
+
+- name: Get latest kubectl version
+  ansible.builtin.uri:
+    url: https://dl.k8s.io/release/stable.txt
+    return_content: yes
+  register: kubectl_version
+
+- name: Download kubectl binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+
+- name: Install Helm
+  ansible.builtin.shell: |
+    curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod 700 /tmp/get_helm.sh
+    /tmp/get_helm.sh
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Configure kubeconfig for EKS
+  ansible.builtin.shell: |
+    mkdir -p /home/ec2-user/.kube
+    aws eks update-kubeconfig \
+      --name "{{ eks_cluster_name }}" \
+      --region "{{ aws_region }}" \
+      --kubeconfig /home/ec2-user/.kube/config
+  become: yes
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Verify cluster access
+  ansible.builtin.command: kubectl get nodes
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  changed_when: false
+
+- name: Add ingress-nginx Helm repo
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
+    repo_url: https://kubernetes.github.io/ingress-nginx
+  environment:
+    KUBECONFIG: /home/ec2-user/.kube/config
+    HOME: /home/ec2-user
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Ensure Helm directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+  loop:
+    - /home/ec2-user/.config
+    - /home/ec2-user/.config/helm
+    - /home/ec2-user/.cache
+    - /home/ec2-user/.cache/helm
+    - /home/ec2-user/.cache/helm/repository
+    - /home/ec2-user/.local
+    - /home/ec2-user/.local/share
+    - /home/ec2-user/.local/share/helm
+
+- name: Remove stale Helm cache files
+  ansible.builtin.file:
+    path: /home/ec2-user/.cache/helm/repository
+    state: absent
+
+- name: Recreate Helm cache directories
+  ansible.builtin.file:
+    path: /home/ec2-user/.cache/helm/repository
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+
+- name: Fix Helm config ownership
+  ansible.builtin.file:
+    path: /home/ec2-user/.config/helm
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    recurse: yes
+
+- name: Install ingress-nginx controller
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: ingress-nginx
+    create_namespace: true
+    update_repo_cache: true
+    wait: true
+    timeout: 5m
+    state: present
+  become: yes
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    XDG_CONFIG_HOME: /home/ec2-user/.config
+    XDG_CACHE_HOME: /home/ec2-user/.cache
+    XDG_DATA_HOME: /home/ec2-user/.local/share
+    HELM_CONFIG_HOME: /home/ec2-user/.config/helm
+    HELM_CACHE_HOME: /home/ec2-user/.cache/helm
+    HELM_DATA_HOME: /home/ec2-user/.local/share/helm
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Create k8s directory on EC2
+  ansible.builtin.file:
+    path: /home/ec2-user/k8s
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+
+- name: Create envs directory on EC2
+  ansible.builtin.file:
+    path: "/home/ec2-user/k8s/envs/{{ environment }}"
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+
+- name: Copy base k8s manifests to EC2
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/{{ item }}"
+    dest: "/home/ec2-user/k8s/{{ item }}"
+    owner: ec2-user
+    group: ec2-user
+    mode: "0644"
+  loop:
+    - namespace.yml
+    - storageclass.yml
+    - postgres.yml
+    - redis.yml
+    - kafka.yml
+    - user-service.yml
+    - transaction-service.yml
+    - activity-service.yml
+    - ingress.yml
+    - datadog-agent.yml
+
+- name: Copy environment-specific configmap
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/envs/{{ environment }}/configmap.yml"
+    dest: "/home/ec2-user/k8s/envs/{{ environment }}/configmap.yml"
+    owner: ec2-user
+    group: ec2-user
+    mode: "0644"
+
+- name: Copy environment-specific secret
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/envs/{{ environment }}/secret.yml"
+    dest: "/home/ec2-user/k8s/envs/{{ environment }}/secret.yml"
+    owner: ec2-user
+    group: ec2-user
+    mode: "0644"
+
+- name: Copy environment-specific resources
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../k8s/envs/{{ environment }}/resources.env"
+    dest: "/home/ec2-user/k8s/envs/{{ environment }}/resources.env"
+    owner: ec2-user
+    group: ec2-user
+    mode: "0644"
+
+- name: Add Datadog Helm repo
+  ansible.builtin.command: helm repo add datadog https://helm.datadoghq.com
+  register: dd_repo_add
+  failed_when: dd_repo_add.rc not in [0]
+  changed_when: "'has been added' in dd_repo_add.stdout or dd_repo_add.rc == 0"
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+
+- name: Update Helm repo
+  ansible.builtin.command: helm repo update
+  changed_when: false
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+
+- name: Install Datadog Operator via Helm
+  kubernetes.core.helm:
+    name: datadog-operator
+    chart_ref: datadog/datadog-operator
+    release_namespace: datadog
+    create_namespace: true
+    update_repo_cache: true
+    kubeconfig: /home/ec2-user/.kube/config
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+
+- name: Wait for Datadog Operator CRDs to be available
+  ansible.builtin.command: kubectl get crd datadogagents.datadoghq.com
+  register: crd_check
+  retries: 10
+  delay: 10
+  until: crd_check.rc == 0
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+
+- name: Set app image in user-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/user-service.yml
+    regexp: 'YOUR_ECR_URL/user-service:latest'
+    replace: "{{ user_service_image }}"
+
+- name: Set app image in transaction-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/transaction-service.yml
+    regexp: 'YOUR_ECR_URL/transaction-service:latest'
+    replace: "{{ transaction_service_image }}"
+
+- name: Set app image in activity-service.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/activity-service.yml
+    regexp: 'YOUR_ECR_URL/activity-service:latest'
+    replace: "{{ activity_service_image }}"
+
+- name: Set app image in postgres.yml
+  ansible.builtin.replace:
+    path: /home/ec2-user/k8s/postgres.yml
+    regexp: 'YOUR_ECR_URL/bank-app-postgres:latest'
+    replace: "{{ postgres_image }}"
+
+- name: Fix StorageClass
+  ansible.builtin.shell: |
+    kubectl delete storageclass gp2 --ignore-not-found=true
+    sleep 5
+    kubectl apply -f /home/ec2-user/k8s/storageclass.yml
+    kubectl get storageclass
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+  register: sc_fix
+
+# === Namespace-based deployment ===
+- name: Create processed manifests directory
+  ansible.builtin.file:
+    path: "/home/ec2-user/k8s/processed"
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+
+- name: Process base manifests (replace __NAMESPACE__)
+  ansible.builtin.shell: |
+    sed 's/__NAMESPACE__/{{ namespace }}/g' /home/ec2-user/k8s/{{ item }} > /home/ec2-user/k8s/processed/{{ item }}
+  loop:
+    - namespace.yml
+    - postgres.yml
+    - redis.yml
+    - kafka.yml
+    - user-service.yml
+    - transaction-service.yml
+    - activity-service.yml
+    - ingress.yml
+    - datadog-agent.yml
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+
+- name: Process environment-specific configmap
+  ansible.builtin.shell: |
+    sed 's/__NAMESPACE__/{{ namespace }}/g' /home/ec2-user/k8s/envs/{{ environment }}/configmap.yml > /home/ec2-user/k8s/processed/configmap.yml
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+
+- name: Process environment-specific secret
+  ansible.builtin.shell: |
+    sed 's/__NAMESPACE__/{{ namespace }}/g' /home/ec2-user/k8s/envs/{{ environment }}/secret.yml > /home/ec2-user/k8s/processed/secret.yml
+  become_user: ec2-user
+  environment:
+    HOME: /home/ec2-user
+
+- name: Apply namespace
+  ansible.builtin.shell: kubectl apply -f /home/ec2-user/k8s/processed/namespace.yml
+  become_user: ec2-user
+  environment: &k8s_env
+    HOME: /home/ec2-user
+    KUBECONFIG: /home/ec2-user/.kube/config
+    AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+    AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+
+- name: Apply infrastructure
+  ansible.builtin.shell: |
+    kubectl apply -f /home/ec2-user/k8s/processed/secret.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/configmap.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/postgres.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/redis.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/kafka.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/datadog-agent.yml
+  become_user: ec2-user
+  environment: *k8s_env
+
+- name: Apply app services
+  ansible.builtin.shell: |
+    kubectl apply -f /home/ec2-user/k8s/processed/user-service.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/transaction-service.yml
+    kubectl apply -f /home/ec2-user/k8s/processed/activity-service.yml
+  become_user: ec2-user
+  environment: *k8s_env
+
+- name: Apply ingress resource
+  ansible.builtin.shell: kubectl apply -f /home/ec2-user/k8s/processed/ingress.yml
+  become_user: ec2-user
+  environment: *k8s_env
+
+# === Apply per-environment resource limits ===
+- name: Load resource allocations
+  ansible.builtin.include_vars:
+    file: "/home/ec2-user/k8s/envs/{{ environment }}/resources.env"
+    name: env_resources
+
+- name: Apply resource limits to user-service
+  ansible.builtin.shell: |
+    kubectl set resources deployment user-service -n {{ namespace }} \
+      --requests="cpu={{ env_resources.USER_SERVICE_CPU_REQUEST }},memory={{ env_resources.USER_SERVICE_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.USER_SERVICE_CPU_LIMIT }},memory={{ env_resources.USER_SERVICE_MEM_LIMIT }}"
+    kubectl scale deployment user-service -n {{ namespace }} --replicas={{ env_resources.REPLICAS_USER_SERVICE }}
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Apply resource limits to transaction-service
+  ansible.builtin.shell: |
+    kubectl set resources deployment transaction-service -n {{ namespace }} \
+      --requests="cpu={{ env_resources.TRANSACTION_SERVICE_CPU_REQUEST }},memory={{ env_resources.TRANSACTION_SERVICE_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.TRANSACTION_SERVICE_CPU_LIMIT }},memory={{ env_resources.TRANSACTION_SERVICE_MEM_LIMIT }}"
+    kubectl scale deployment transaction-service -n {{ namespace }} --replicas={{ env_resources.REPLICAS_TRANSACTION_SERVICE }}
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Apply resource limits to activity-service
+  ansible.builtin.shell: |
+    kubectl set resources deployment activity-service -n {{ namespace }} \
+      --requests="cpu={{ env_resources.ACTIVITY_SERVICE_CPU_REQUEST }},memory={{ env_resources.ACTIVITY_SERVICE_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.ACTIVITY_SERVICE_CPU_LIMIT }},memory={{ env_resources.ACTIVITY_SERVICE_MEM_LIMIT }}"
+    kubectl scale deployment activity-service -n {{ namespace }} --replicas={{ env_resources.REPLICAS_ACTIVITY_SERVICE }}
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Apply resource limits to postgres
+  ansible.builtin.shell: |
+    kubectl set resources deployment postgres -n {{ namespace }} \
+      --requests="cpu={{ env_resources.POSTGRES_CPU_REQUEST }},memory={{ env_resources.POSTGRES_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.POSTGRES_CPU_LIMIT }},memory={{ env_resources.POSTGRES_MEM_LIMIT }}"
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Apply resource limits to kafka
+  ansible.builtin.shell: |
+    kubectl set resources deployment kafka -n {{ namespace }} \
+      --requests="cpu={{ env_resources.KAFKA_CPU_REQUEST }},memory={{ env_resources.KAFKA_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.KAFKA_CPU_LIMIT }},memory={{ env_resources.KAFKA_MEM_LIMIT }}"
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Apply resource limits to redis
+  ansible.builtin.shell: |
+    kubectl set resources deployment redis -n {{ namespace }} \
+      --requests="cpu={{ env_resources.REDIS_CPU_REQUEST }},memory={{ env_resources.REDIS_MEM_REQUEST }}" \
+      --limits="cpu={{ env_resources.REDIS_CPU_LIMIT }},memory={{ env_resources.REDIS_MEM_LIMIT }}"
+  become_user: ec2-user
+  environment: *k8s_env
+  failed_when: false
+
+- name: Show deployment status
+  ansible.builtin.shell: |
+    echo "=== Pods in {{ namespace }} ==="
+    kubectl get pods -n {{ namespace }}
+    echo ""
+    echo "=== Services in {{ namespace }} ==="
+    kubectl get svc -n {{ namespace }}
+  become_user: ec2-user
+  environment: *k8s_env
+  register: deploy_status
+  changed_when: false
+
+- name: Print deployment status
+  ansible.builtin.debug:
+    var: deploy_status.stdout_lines

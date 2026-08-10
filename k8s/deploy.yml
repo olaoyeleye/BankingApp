@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bank-app
-  namespace: banking
+  namespace: __NAMESPACE__
 spec:
   replicas: 1
   selector:

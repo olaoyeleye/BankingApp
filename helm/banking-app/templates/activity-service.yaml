@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activity-service
+  namespace: {{ include "banking-app.namespace" . }}
+  labels:
+    app: activity-service
+spec:
+  replicas: {{ .Values.activityService.replicas }}
+  selector:
+    matchLabels:
+      app: activity-service
+  template:
+    metadata:
+      labels:
+        app: activity-service
+    spec:
+      containers:
+      - name: activity-service
+        image: "{{ .Values.ecrRegistry }}/{{ .Values.activityService.image.repository }}:{{ .Values.imageTag }}"
+        ports:
+        - containerPort: 8001
+        resources:
+          requests:
+            memory: "{{ .Values.activityService.resources.requests.memory }}"
+            cpu: "{{ .Values.activityService.resources.requests.cpu }}"
+          limits:
+            memory: "{{ .Values.activityService.resources.limits.memory }}"
+            cpu: "{{ .Values.activityService.resources.limits.cpu }}"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: DATABASE_URL
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: banking-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: FRONTEND_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: banking-config
+              key: FRONTEND_ORIGIN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activity-service
+  namespace: {{ include "banking-app.namespace" . }}
+spec:
+  selector:
+    app: activity-service
+  ports:
+    - port: {{ .Values.activityService.service.port }}
+      targetPort: 8001
+  type: ClusterIP

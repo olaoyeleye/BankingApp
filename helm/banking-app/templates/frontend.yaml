@@ -1,0 +1,53 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-frontend
+  namespace: {{ include "banking-app.namespace" . }}
+  labels:
+    app: bank-frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      app: bank-frontend
+  template:
+    metadata:
+      labels:
+        app: bank-frontend
+    spec:
+      containers:
+        - name: bank-frontend
+          image: "{{ .Values.ecrRegistry }}/{{ .Values.frontend.image.repository }}:{{ .Values.imageTag }}"
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: "{{ .Values.frontend.resources.requests.memory }}"
+              cpu: "{{ .Values.frontend.resources.requests.cpu }}"
+            limits:
+              memory: "{{ .Values.frontend.resources.limits.memory }}"
+              cpu: "{{ .Values.frontend.resources.limits.cpu }}"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: banking-secrets
+                  key: NODE_ENV
+          envFrom:
+            - configMapRef:
+                name: banking-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-frontend
+  namespace: {{ include "banking-app.namespace" . }}
+spec:
+  selector:
+    app: bank-frontend
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: 3000
+  type: ClusterIP
+{{- end }}

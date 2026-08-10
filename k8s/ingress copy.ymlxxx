@@ -1,0 +1,117 @@
+helm repo add datadog https://helm.datadoghq.com
+helm install datadog-operator datadog/datadog-operator --namespace datadog --create-namespace
+kubectl create secret generic datadog-secret --from-literal api-key=ooooooooooooooooob8813c388d9f80b -n datadog
+
+
+
+helm uninstall datadog-operator -n datadog
+kubectl delete secret datadog-secret -n datadog
+
+helm repo add datadog https://helm.datadoghq.com
+helm install datadog-operator datadog/datadog-operator --namespace datadog --create-namespace
+kubectl create secret generic datadog-secret --from-literal api-key=2c5fb0e4e655c50ab6c49b42ea39ab92 -n datadog
+
+
+
+# Debian/Ubuntu
+sudo apt update
+sudo apt install certbot python3-certbot-nginx -y
+
+# CentOS/RHEL
+sudo yum install epel-release -y
+sudo yum install certbot python3-certbot-nginx -y
+
+sudo certbot --nginx -d example.com -d www.example.com
+
+
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datadog
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datadog-secret
+  namespace: datadog
+type: Opaque
+stringData:
+  api-key: "2c5fb0e4e655c50ab6c49b42ea39ab92"
+---
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+  namespace: datadog
+spec:
+  global:
+    site: uk1.datadoghq.com
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+  features:
+    kubeStateMetricsCore:
+      enabled: true
+  override:
+    clusterAgent:
+      env:
+        - name: DD_LOGS_ENABLED
+          value: "true"
+        - name: DD_APM_ENABLED
+          value: "true"
+        - name: DD_PROCESS_AGENT_ENABLED
+          value: "true"
+
+
+
+
+
+
+===========
+
+cat << 'EOF' > datadog.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datadog
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datadog-secret
+  namespace: datadog
+type: Opaque
+stringData:
+  api-key: "2c5fb0e4e655c50ab6c49b42ea39ab92"
+  app-key: "2c5fb0e4e655c50ab6c49b42ea39ab92"
+---
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+  namespace: datadog
+spec:
+  global:
+    site: uk1.datadoghq.com
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+  features:
+    kubeStateMetricsCore:
+      enabled: true
+  override:
+    clusterAgent:
+      env:
+        - name: DD_LOGS_ENABLED
+          value: "true"
+        - name: DD_APM_ENABLED
+          value: "true"
+        - name: DD_PROCESS_AGENT_ENABLED
+          value: "true"
+EOF
+
+kubectl apply -f datadog.yaml
+

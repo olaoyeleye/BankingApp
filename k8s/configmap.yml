@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: banking-config
-  namespace: banking
+  namespace: __NAMESPACE__
 data:
   KAFKA_BOOTSTRAP_SERVERS: "kafka-service:29092"
   REDIS_HOST: "redis-service"

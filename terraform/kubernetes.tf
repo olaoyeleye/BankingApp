@@ -79,12 +79,10 @@ resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
 }
 
 resource "aws_eks_cluster" "main" {
-  name     = "${var.vpc_name}-${var.environment}-cluster"
+  name     = "${var.vpc_name}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
 
-  tags = {
-    Environment = var.environment
-  }
+  tags = {}
 
   access_config {
     authentication_mode = "API_AND_CONFIG_MAP"
@@ -151,9 +149,7 @@ resource "aws_eks_node_group" "main" {
     min_size     = 3
   }
 
-  tags = {
-    Environment = var.environment
-  }
+  tags = {}
 
   update_config {
     max_unavailable = 1

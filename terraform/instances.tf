@@ -8,10 +8,6 @@ resource "aws_instance" "nginx" {
   vpc_security_group_ids = [aws_security_group.public_kunle_sg.id]
 
   tags = {
-    Name        = "${var.instance-name-nginx}-${var.environment}"
-    Environment = var.environment
+    Name = var.instance-name-nginx
   }
 }
-
-
- 

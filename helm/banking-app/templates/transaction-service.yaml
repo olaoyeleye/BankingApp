@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+  namespace: {{ include "banking-app.namespace" . }}
+  labels:
+    app: transaction-service
+spec:
+  replicas: {{ .Values.transactionService.replicas }}
+  selector:
+    matchLabels:
+      app: transaction-service
+  template:
+    metadata:
+      labels:
+        app: transaction-service
+    spec:
+      containers:
+      - name: transaction-service
+        image: "{{ .Values.ecrRegistry }}/{{ .Values.transactionService.image.repository }}:{{ .Values.imageTag }}"
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "{{ .Values.transactionService.resources.requests.memory }}"
+            cpu: "{{ .Values.transactionService.resources.requests.cpu }}"
+          limits:
+            memory: "{{ .Values.transactionService.resources.limits.memory }}"
+            cpu: "{{ .Values.transactionService.resources.limits.cpu }}"
+        env:
+        - name: SPRING_DATASOURCE_URL
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_URL
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_USERNAME
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: banking-secrets
+              key: SPRING_DATASOURCE_PASSWORD
+        envFrom:
+        - configMapRef:
+            name: banking-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: {{ include "banking-app.namespace" . }}
+spec:
+  selector:
+    app: transaction-service
+  ports:
+    - port: {{ .Values.transactionService.service.port }}
+      targetPort: 8080
+  type: ClusterIP
