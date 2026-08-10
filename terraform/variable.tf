@@ -4,6 +4,17 @@ variable "region" {
   default     = "eu-west-1"
 }
 
+variable "environment" {
+  description = "Deployment environment (test, dev, prod)"
+  type        = string
+  default     = "dev"
+
+  validation {
+    condition     = contains(["test", "dev", "prod"], var.environment)
+    error_message = "Environment must be one of: test, dev, prod."
+  }
+}
+
 variable "vpc_name" {
   description = "Base name for VPC and EKS resources"
   type        = string

@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket  = "techbleat-bank-application"
-    key     = "ecobank-bank-app-statefile/terraform.tfstate"
+    key     = "banking-app/terraform.tfstate" # Overridden via -backend-config at terraform init
     region  = "eu-west-1"
     encrypt = true
   }

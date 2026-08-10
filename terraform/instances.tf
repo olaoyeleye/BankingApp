@@ -7,8 +7,9 @@ resource "aws_instance" "nginx" {
   subnet_id              = aws_subnet.public_kunle_subnet_a.id
   vpc_security_group_ids = [aws_security_group.public_kunle_sg.id]
 
-  tags ={
-    Name = var.instance-name-nginx
+  tags = {
+    Name        = "${var.instance-name-nginx}-${var.environment}"
+    Environment = var.environment
   }
 }
 
