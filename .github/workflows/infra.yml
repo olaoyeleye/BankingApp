@@ -1,11 +1,21 @@
 name: 1. Provision Infrastructure
 
 on:
+  push:
+    branches: [ "dev", "test", "prod" ]
+    paths:
+      - 'terraform/**'
+      - 'ansible/**'
+      - '.github/workflows/infra.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: infra-provision
+  cancel-in-progress: false
 
 jobs:
   terraform-apply:
