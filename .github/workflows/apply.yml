@@ -176,9 +176,9 @@ jobs:
           IMAGE_TAG="${{ github.sha }}"
           NAMESPACE="banking-${ENV}"
           echo "Deploying banking-app to namespace: $NAMESPACE"
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           helm upgrade --install banking-app ./helm/banking-app \
             --namespace "$NAMESPACE" \
-            --create-namespace \
             -f ./helm/banking-app/values.yaml \
             -f ./helm/banking-app/values-${ENV}.yaml \
             --set ecrRegistry="$ECR_REGISTRY" \
