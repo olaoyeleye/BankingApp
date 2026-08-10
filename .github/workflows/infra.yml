@@ -1,45 +1,18 @@
-name: Infrastructure (Terraform)
+name: 1. Provision Infrastructure
 
 on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Target environment"
-        required: true
-        type: choice
-        options:
-          - test
-          - dev
-          - prod
-      terraform_action:
-        description: "Terraform action"
-        required: true
-        default: "apply"
-        type: choice
-        options:
-          - apply
-          - destroy
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  terraform-infra:
+  terraform-apply:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set environment config
-        id: config
-        shell: bash
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-          echo "namespace=banking-$ENV" >> "$GITHUB_OUTPUT"
-          echo "Managing infrastructure for environment: $ENV"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -66,56 +39,78 @@ jobs:
           key_name            = "${{ secrets.KEY_NAME }}"
           EOF
 
-      - name: Terraform Init
+      - name: Download AWS Load Balancer Controller IAM Policy
         working-directory: ./terraform
-        run: terraform init -reconfigure
-
-      - name: Delete EKS node groups first (for destroy)
-        if: github.event.inputs.terraform_action == 'destroy'
         shell: bash
         run: |
-          set -euo pipefail
-          CLUSTER_NAME="${{ secrets.VPC_NAME }}-cluster"
-          REGION="${{ secrets.AWS_REGION }}"
-          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
-            NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "$REGION" --query 'nodegroups[]' --output text)
-            if [ -n "${NODEGROUPS// /}" ]; then
-              for NG in $NODEGROUPS; do
-                aws eks delete-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
-                aws eks wait nodegroup-deleted --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
-              done
-            fi
-          fi
+          curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
-      - name: Terraform Destroy
-        if: github.event.inputs.terraform_action == 'destroy'
+      - name: Terraform Init
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: |
-          helm uninstall ingress-nginx -n ingress-nginx 2>/dev/null || true
-          terraform state rm helm_release.ingress_nginx 2>/dev/null || true
-          terraform state rm kubernetes_namespace_v1.banking 2>/dev/null || true
-          terraform state rm aws_eks_node_group.main 2>/dev/null || true
-          terraform destroy -auto-approve
+        run: terraform init -reconfigure
 
       - name: Terraform Plan
-        if: github.event.inputs.terraform_action != 'destroy'
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
-        if: github.event.inputs.terraform_action != 'destroy'
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: terraform apply -auto-approve tfplan
 
-      - name: Upload terraform outputs
-        if: github.event.inputs.terraform_action != 'destroy'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-outputs
-          path: terraform/
+      - name: Configure Ansible inventory
+        shell: bash
+        run: |
+          NGINX_IP=$(cd terraform && terraform output -raw nginx_public_ip 2>/dev/null || echo "")
+          if [ -z "$NGINX_IP" ]; then
+            echo "Warning: nginx_public_ip output not found, trying instance_public_ip..."
+            NGINX_IP=$(cd terraform && terraform output -raw instance_public_ip 2>/dev/null || echo "")
+          fi
+          echo "Nginx IP: $NGINX_IP"
+          mkdir -p ansible
+          cat > ansible/hosts.ini <<EOF
+          [nginx]
+          $NGINX_IP ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/ansible_key.pem
+
+          [nginx:vars]
+          ansible_python_interpreter=/usr/bin/python3
+          aws_region=${{ secrets.AWS_REGION }}
+          eks_cluster_name=${{ secrets.VPC_NAME }}-cluster
+          EOF
+
+      - name: Save SSH private key
+        env:
+          SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/ansible_key.pem
+          chmod 600 ~/.ssh/ansible_key.pem
+
+      - name: Run Ansible playbook
+        shell: bash
+        run: |
+          cd ansible
+          ansible-galaxy collection install kubernetes.core
+          export ANSIBLE_HOST_KEY_CHECKING=False
+          ansible-playbook -i hosts.ini playbook.yml -v
+
+      - name: Print next steps
+        shell: bash
+        run: |
+          echo "============================================"
+          echo "  Infrastructure provisioned successfully!"
+          echo "============================================"
+          echo ""
+          echo "Next steps:"
+          echo "  Push to dev/test/prod branch to trigger Deploy Application workflow"
+          echo "  Or run the Destroy workflow manually to tear down"
+          echo ""
+          echo "EKS Cluster: ${{ secrets.VPC_NAME }}-cluster"
+          echo "Region: ${{ secrets.AWS_REGION }}"
+          echo "============================================"

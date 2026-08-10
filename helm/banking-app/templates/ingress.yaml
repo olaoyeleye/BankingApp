@@ -43,6 +43,13 @@ spec:
               name: transaction-service
               port:
                 number: {{ .Values.transactionService.service.port }}
+        - path: /balance
+          pathType: Prefix
+          backend:
+            service:
+              name: transaction-service
+              port:
+                number: {{ .Values.transactionService.service.port }}
         - path: /activities
           pathType: Prefix
           backend:

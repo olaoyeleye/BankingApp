@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-//const USER_API = "http://INGRESS_HOST/users";
-//const TX_API = "http://INGRESS_HOST/transactions";
-//const ACTIVITY_API = "http://INGRESS_HOST/activities";
-
-
-// const USER_API = "/users";
-// const TX_API = "/transactions";
-// const ACTIVITY_API = "/activities";
-const USER_API = "http://INGRESS_HOST";
-const TX_API = "http://INGRESS_HOST";
-const ACTIVITY_API = "http://INGRESS_HOST";
+// Relative paths — the ingress routes /users, /transactions, /activities to the correct backend services
+// This eliminates the need to know the ingress hostname at build time
+const USER_API = "";
+const TX_API = "";
+const ACTIVITY_API = "";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",

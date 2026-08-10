@@ -22,7 +22,7 @@ This project supports **three environments**: `dev`, `test`, and `prod`. Each en
 
 ## GitHub Actions Workflows
 
-### `apply.yml` — Application Deployment (triggered on push)
+### `apply.yml` — 2. Deploy Application (triggered on push)
 - **Triggers**: Push to `dev`, `test`, or `prod` branch; or manual dispatch
 - **Steps**:
   1. Detect environment from branch name
@@ -30,11 +30,12 @@ This project supports **three environments**: `dev`, `test`, and `prod`. Each en
   3. Deploy via `helm upgrade --install` with environment-specific values
   4. Sync manifest repo to EC2 Nginx instance
 
-### `infra.yml` — Infrastructure Management (manual only)
+### `infra.yml` — 1. Provision Infrastructure (run first, manual only)
 - **Trigger**: Manual dispatch only
-- **Steps**: Terraform init/plan/apply (or destroy) for the shared EKS cluster
+- **Steps**: Terraform init/plan/apply + Ansible (installs kubectl, Helm, ingress-nginx, Datadog)
+- **Must run before deploying applications**
 
-### `destroy.yml` — Destroy Application (manual only)
+### `destroy.yml` — 3. Destroy (manual only)
 - **Trigger**: Manual dispatch only
 - **Steps**:
   1. Uninstall Helm release and delete namespace

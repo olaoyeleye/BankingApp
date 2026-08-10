@@ -1,4 +1,4 @@
-name: Deploy Application
+name: 2. Deploy Application
 
 on:
   push:
@@ -96,21 +96,6 @@ jobs:
           docker push "$ECR_REGISTRY/bank-app-postgres:$IMAGE_TAG"
           docker tag "$ECR_REGISTRY/bank-app-postgres:$IMAGE_TAG" "$ECR_REGISTRY/bank-app-postgres:latest"
           docker push "$ECR_REGISTRY/bank-app-postgres:latest"
-      - name: Update frontend API endpoints
-        working-directory: ./techbleat-global-bank-frontend
-        shell: bash
-        run: |
-          aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-cluster" --region "${{ secrets.AWS_REGION }}"
-          NAMESPACE="banking-${{ needs.set-environment.outputs.environment }}"
-          INGRESS_HOST=""
-          for i in {1..20}; do
-            INGRESS_HOST=$(kubectl -n "$NAMESPACE" get ingress banking-ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-            if [ -n "$INGRESS_HOST" ]; then break; fi
-            echo "Attempt $i: ingress host not ready, waiting 15s..."
-            sleep 15
-          done
-          if [ -z "$INGRESS_HOST" ]; then echo "Ingress host is empty"; exit 1; fi
-          sed -i "s|INGRESS_HOST|${INGRESS_HOST}|g" src/App.jsx
       - name: Build & Push (Frontend)
         env:
           ECR_REGISTRY: "${{ steps.login-ecr.outputs.registry }}"
