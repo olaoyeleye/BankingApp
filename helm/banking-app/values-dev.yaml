@@ -55,6 +55,9 @@ postgres:
     storageClassName: gp2
     size: 5Gi
 
+
+
+
 redis:
   replicas: 1
   resources:
