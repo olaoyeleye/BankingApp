@@ -6,7 +6,7 @@ resource "aws_subnet" "public_kunle_subnet_a" {
 
   tags = {
     Name                                            = "${var.vpc_name}-public-a"
-    "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
+    "kubernetes.io/cluster/${var.vpc_name}-${var.environment}-cluster" = "shared"
     "kubernetes.io/role/elb"                        = "1"
   }
 }
@@ -19,7 +19,7 @@ resource "aws_subnet" "public_kunle_subnet_b" {
 
   tags = {
     Name                                            = "${var.vpc_name}-public-b"
-    "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
+    "kubernetes.io/cluster/${var.vpc_name}-${var.environment}-cluster" = "shared"
     "kubernetes.io/role/elb"                        = "1"
   }
 }

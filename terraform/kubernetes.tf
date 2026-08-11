@@ -5,7 +5,7 @@ data "aws_availability_zones" "available" {
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "eks_cluster" {
-  name = "${var.vpc_name}-eks-cluster-role"
+  name = "${var.vpc_name}-${var.environment}-eks-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -79,7 +79,7 @@ resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
 }
 
 resource "aws_eks_cluster" "main" {
-  name     = "${var.vpc_name}-cluster"
+  name     = "${var.vpc_name}-${var.environment}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
 
   tags = {}

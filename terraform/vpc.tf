@@ -6,6 +6,6 @@ resource "aws_vpc" "vpc" {
 
   tags = {
     Name                                            = "${var.vpc_name}-vpc"
-    "kubernetes.io/cluster/${var.vpc_name}-cluster" = "shared"
+    "kubernetes.io/cluster/${var.vpc_name}-${var.environment}-cluster" = "shared"
   }
 }

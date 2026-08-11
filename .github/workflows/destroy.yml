@@ -33,6 +33,17 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'destroy') }}
     environment: ${{ github.event.inputs.environment || github.ref_name }}
     steps:
+      - name: Detect environment
+        id: env
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="${GITHUB_REF##*/}"
+          fi
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -47,7 +58,7 @@ jobs:
         id: cluster-check
         shell: bash
         run: |
-          CLUSTER_NAME="${{ secrets.VPC_NAME }}-cluster"
+          CLUSTER_NAME="${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
           REGION="${{ secrets.AWS_REGION }}"
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -69,7 +80,7 @@ jobs:
       - name: Update kubeconfig for EKS
         if: steps.cluster-check.outputs.exists == 'true'
         shell: bash
-        run: aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-cluster" --region "${{ secrets.AWS_REGION }}"
+        run: aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --region "${{ secrets.AWS_REGION }}"
 
       - name: Uninstall Helm release
         if: steps.cluster-check.outputs.exists == 'true'
@@ -123,6 +134,7 @@ jobs:
           instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
           vpc_name            = "${{ secrets.VPC_NAME }}"
           key_name            = "${{ secrets.KEY_NAME }}"
+          environment         = "${{ steps.env.outputs.environment }}"
           EOF
 
       - name: Download AWS Load Balancer Controller IAM Policy
@@ -135,7 +147,7 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
-        run: terraform init -reconfigure
+        run: terraform init -reconfigure -backend-config="key=banking-app/${{ steps.env.outputs.environment }}/terraform.tfstate"
 
       - name: Install kubectl and Helm
         shell: bash
@@ -147,7 +159,7 @@ jobs:
 
       - name: Update kubeconfig for EKS
         shell: bash
-        run: aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-cluster" --region "${{ secrets.AWS_REGION }}" || true
+        run: aws eks update-kubeconfig --name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --region "${{ secrets.AWS_REGION }}" || true
 
       - name: Remove Kubernetes resources and Helm releases
         shell: bash
@@ -163,7 +175,7 @@ jobs:
       - name: Delete EKS node groups
         shell: bash
         run: |
-          CLUSTER_NAME="${{ secrets.VPC_NAME }}-cluster"
+          CLUSTER_NAME="${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
           REGION="${{ secrets.AWS_REGION }}"
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
             NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "$REGION" --query 'nodegroups[]' --output text)
@@ -179,8 +191,8 @@ jobs:
       - name: Delete EKS add-ons
         shell: bash
         run: |
-          aws eks delete-addon --cluster-name "${{ secrets.VPC_NAME }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
-          aws eks wait addon-deleted --cluster-name "${{ secrets.VPC_NAME }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
+          aws eks delete-addon --cluster-name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
+          aws eks wait addon-deleted --cluster-name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
 
       - name: Terraform Plan Destroy
         working-directory: ./terraform
