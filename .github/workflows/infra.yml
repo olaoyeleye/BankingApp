@@ -73,13 +73,94 @@ jobs:
         run: |
           curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
-      - name: Import existing IAM resources (if they exist)
+      - name: Reconcile EKS addon (wait or repair, never delete)
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          VPC="${{ secrets.VPC_NAME }}"
+          ENV="${{ steps.env.outputs.environment }}"
+          CLUSTER="$VPC-$ENV-cluster"
+
+          if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
+            echo "Cluster $CLUSTER does not exist yet - skipping addon reconcile"
+            exit 0
+          fi
+
+          if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+            echo "Addon not present yet - skipping reconcile (Terraform will create it)"
+            exit 0
+          fi
+
+          # Helper: get addon status
+          get_status() {
+            aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN"
+          }
+
+          STATUS=$(get_status)
+          echo "Current addon status: $STATUS"
+
+          # If in-flight, wait for it to settle
+          if echo "$STATUS" | grep -qE "CREATING|UPDATING|DELETING"; then
+            echo "Addon is $STATUS. Waiting up to 15 min for it to settle..."
+            MAX=30
+            for i in $(seq 1 $MAX); do
+              sleep 30
+              STATUS=$(get_status)
+              echo "  Attempt $i/$MAX: status = $STATUS"
+              case "$STATUS" in
+                ACTIVE|DEGRADED) break ;;
+                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED) break ;;
+              esac
+            done
+          fi
+
+          # If the addon ended up in a FAILED state, try to repair it via update-addon
+          # (never delete — deletion creates a race condition where AWS hasn't fully removed it)
+          if echo "$STATUS" | grep -qE "FAILED"; then
+            echo "Addon is in $STATUS. Attempting to repair via update-addon..."
+
+            # Build the correct role ARN
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$VPC-$ENV-ebs-csi-driver-role"
+            echo "Updating addon with role ARN: $ROLE_ARN"
+
+            # Try updating the addon to fix it (idempotent, no race condition)
+            aws eks update-addon \
+              --cluster-name "$CLUSTER" \
+              --addon-name aws-ebs-csi-driver \
+              --service-account-role-arn "$ROLE_ARN" \
+              --resolve-conflicts PRESERVE 2>&1 || echo "Update attempt completed (may still be processing)"
+
+            # Wait for the update to settle
+            echo "Waiting for repair to complete..."
+            for i in $(seq 1 30); do
+              sleep 30
+              STATUS=$(get_status)
+              echo "  Repair check $i/30: status = $STATUS"
+              case "$STATUS" in
+                ACTIVE|DEGRADED)
+                  echo "Addon repaired successfully ($STATUS)."
+                  break
+                  ;;
+                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
+                  echo "WARNING: Addon still in $STATUS after repair attempt."
+                  echo "The addon is imported into Terraform state with ignore_changes."
+                  echo "Terraform will NOT try to modify it. It may need manual investigation."
+                  break
+                  ;;
+              esac
+            done
+          fi
+
+          echo "Addon reconcile complete. Current status: $(get_status)"
+
+      - name: Import existing resources (if they exist)
         working-directory: ./terraform
         shell: bash
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
-          # Helper: import a resource, capturing stderr but treating "already managed" / "not found" as non-fatal
+          # Helper: import a resource, treating "already managed" / "not found" as non-fatal
           try_import() {
             local addr="$1"
             local id="$2"
@@ -100,7 +181,7 @@ jobs:
           VPC="${{ secrets.VPC_NAME }}"
           ENV="${{ steps.env.outputs.environment }}"
 
-          echo "=== Importing IAM roles/policies (names must match kubernetes.tf) ==="
+          echo "=== Importing IAM roles/policies ==="
           try_import aws_iam_role.eks_cluster "$VPC-$ENV-eks-cluster-role"
           try_import aws_iam_role.eks_nodes "$VPC-$ENV-eks-node-role"
           try_import aws_iam_role.ebs_csi_role "$VPC-$ENV-ebs-csi-driver-role"
@@ -126,107 +207,13 @@ jobs:
             try_import aws_eks_node_group.main "$VPC-$ENV-cluster:main-nodes"
           fi
 
-          echo "=== Importing EKS addons (if they exist) ==="
+          echo "=== Importing EKS addon (if it exists) ==="
+          # Always import — even if FAILED. Terraform lifecycle.ignore_changes prevents update conflicts.
           if aws eks describe-addon --cluster-name "$VPC-$ENV-cluster" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
             try_import aws_eks_addon.ebs_csi "$VPC-$ENV-cluster:aws-ebs-csi-driver"
           fi
 
-          echo "=== Import step complete - continuing with addon reconciliation ==="
-
-      - name: Reconcile EKS addons (wait or auto-recover from failure)
-        working-directory: ./terraform
-        shell: bash
-        run: |
-          VPC="${{ secrets.VPC_NAME }}"
-          ENV="${{ steps.env.outputs.environment }}"
-          CLUSTER="$VPC-$ENV-cluster"
-
-          if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
-            echo "Cluster $CLUSTER does not exist yet - skipping addon reconcile (will be created)"
-            exit 0
-          fi
-
-          if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-            echo "Addon aws-ebs-csi-driver not present yet - skipping reconcile (will be created)"
-            exit 0
-          fi
-
-          # Get current status
-          STATUS=$(aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN")
-          echo "Current addon status: $STATUS"
-
-          # If the addon is in a failed state, delete it so Terraform can recreate it cleanly.
-          if echo "$STATUS" | grep -qE "FAILED"; then
-            echo "WARNING: Add-on is in failed state ($STATUS). Attempting auto-recovery..."
-            echo "Deleting broken add-on (preserving resources so running pods are not disrupted)..."
-            aws eks delete-addon \
-              --cluster-name "$CLUSTER" \
-              --addon-name aws-ebs-csi-driver \
-              --preserve-resources || true
-
-            # Wait for deletion to complete
-            echo "Waiting for add-on deletion to complete..."
-            DEL_WAIT=0
-            while [ "$DEL_WAIT" -lt 30 ]; do
-              DEL_WAIT=$((DEL_WAIT + 1))
-              if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-                echo "Add-on deleted successfully."
-                break
-              fi
-              sleep 10
-            done
-
-            # Remove from Terraform state so it can be recreated
-            echo "Removing aws_eks_addon.ebs_csi from Terraform state..."
-            terraform state rm aws_eks_addon.ebs_csi 2>/dev/null || true
-
-            echo "Add-on recovery complete. Terraform will recreate it during apply."
-            exit 0
-          fi
-
-          # If already stable, proceed
-          if [ "$STATUS" = "ACTIVE" ] || [ "$STATUS" = "DEGRADED" ]; then
-            echo "Add-on already in stable state ($STATUS). Proceeding."
-            exit 0
-          fi
-
-          # Otherwise, wait for it to reach a stable state
-          echo "Add-on is $STATUS. Waiting for stable state (ACTIVE/DEGRADED)..."
-          MAX_ATTEMPTS=60
-          ATTEMPT=0
-          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-            ATTEMPT=$((ATTEMPT + 1))
-            STATUS=$(aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN")
-            echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS: addon status = $STATUS"
-            case "$STATUS" in
-              ACTIVE|DEGRADED)
-                echo "Add-on reached stable state ($STATUS). Proceeding."
-                exit 0
-                ;;
-              CREATING|UPDATING|DELETING)
-                sleep 30
-                ;;
-              CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
-                echo "WARNING: Add-on transitioned to failed state ($STATUS) during wait."
-                echo "Deleting broken add-on for auto-recovery..."
-                aws eks delete-addon \
-                  --cluster-name "$CLUSTER" \
-                  --addon-name aws-ebs-csi-driver \
-                  --preserve-resources || true
-                sleep 15
-                terraform state rm aws_eks_addon.ebs_csi 2>/dev/null || true
-                echo "Add-on removed. Terraform will recreate it during apply."
-                exit 0
-                ;;
-              *)
-                echo "Unexpected status: $STATUS - continuing to wait..."
-                sleep 30
-                ;;
-            esac
-          done
-          echo "ERROR: Timed out waiting for addon after 30 minutes."
-          echo "Manual recovery: aws eks delete-addon --cluster-name $CLUSTER --addon-name aws-ebs-csi-driver"
-          exit 1
+          echo "=== Import step complete ==="
 
       - name: Terraform Plan
         working-directory: ./terraform
