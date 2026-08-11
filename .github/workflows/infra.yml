@@ -121,6 +121,16 @@ jobs:
             try_import aws_eks_cluster.main "$VPC-$ENV-cluster"
           fi
 
+          echo "=== Importing EKS node group (if it exists) ==="
+          if aws eks describe-nodegroup --cluster-name "$VPC-$ENV-cluster" --nodegroup-name "main-nodes" >/dev/null 2>&1; then
+            try_import aws_eks_node_group.main "$VPC-$ENV-cluster:main-nodes"
+          fi
+
+          echo "=== Importing EKS addons (if they exist) ==="
+          if aws eks describe-addon --cluster-name "$VPC-$ENV-cluster" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+            try_import aws_eks_addon.ebs_csi "$VPC-$ENV-cluster:aws-ebs-csi-driver"
+          fi
+
           echo "=== Import step complete - continuing with plan/apply ==="
 
       - name: Terraform Plan
