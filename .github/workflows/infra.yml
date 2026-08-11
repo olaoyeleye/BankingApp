@@ -133,6 +133,52 @@ jobs:
 
           echo "=== Import step complete - continuing with plan/apply ==="
 
+      - name: Wait for EKS addons to reach ACTIVE state
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          VPC="${{ secrets.VPC_NAME }}"
+          ENV="${{ steps.env.outputs.environment }}"
+          CLUSTER="$VPC-$ENV-cluster"
+
+          if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
+            echo "Cluster $CLUSTER does not exist yet - skipping addon wait (will be created)"
+            exit 0
+          fi
+
+          if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+            echo "Addon aws-ebs-csi-driver not present yet - skipping wait (will be created)"
+            exit 0
+          fi
+
+          echo "Waiting for EBS CSI addon to reach ACTIVE/DEGRADED state..."
+          MAX_ATTEMPTS=60
+          ATTEMPT=0
+          while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            STATUS=$(aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN")
+            echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS: addon status = $STATUS"
+            case "$STATUS" in
+              ACTIVE|DEGRADED)
+                echo "Add-on reached stable state ($STATUS). Proceeding."
+                exit 0
+                ;;
+              CREATING|UPDATING|DELETING)
+                sleep 30
+                ;;
+              CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
+                echo "ERROR: Add-on is in a failed state ($STATUS). Manual intervention may be required."
+                exit 1
+                ;;
+              *)
+                echo "Unexpected status: $STATUS - continuing to wait..."
+                sleep 30
+                ;;
+            esac
+          done
+          echo "ERROR: Timed out waiting for addon to reach ACTIVE state after 30 minutes."
+          exit 1
+
       - name: Terraform Plan
         working-directory: ./terraform
         env:

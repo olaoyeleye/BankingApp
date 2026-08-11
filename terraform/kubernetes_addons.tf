@@ -9,6 +9,15 @@ resource "aws_eks_addon" "ebs_csi" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
+  # Avoid churn-driven re-updates that collide with in-flight AWS updates.
+  # After creation/import, Terraform treats these fields as immutable.
+  lifecycle {
+    ignore_changes = [
+      service_account_role_arn,
+      addon_version,
+    ]
+  }
+
   timeouts {
     create = "20m"
     update = "20m"
