@@ -204,6 +204,15 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         shell: bash
+        run: terraform state rm aws_iam_openid_connect_provider.eks || true
+
+
+
+      - name: Terraform Plan Destroy
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        shell: bash
         run: terraform plan -destroy -out=destroy.tfplan
 
       - name: Terraform Destroy
