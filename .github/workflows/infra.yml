@@ -79,33 +79,49 @@ jobs:
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
+          # Helper: import a resource, capturing stderr but treating "already managed" / "not found" as non-fatal
+          try_import() {
+            local addr="$1"
+            local id="$2"
+            local log
+            log="$(terraform import "$addr" "$id" 2>&1)" || true
+            echo "$log"
+            if echo "$log" | grep -q "Resource already managed by Terraform"; then
+              echo "=> '$addr' already in state, skipping"
+            elif echo "$log" | grep -q "Cannot import non-existent remote object"; then
+              echo "=> '$addr' does not exist remotely yet, will be created"
+            elif echo "$log" | grep -q "Import successful"; then
+              echo "=> '$addr' imported"
+            fi
+          }
+
           # Get account ID for policy ARN
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           VPC="${{ secrets.VPC_NAME }}"
           ENV="${{ steps.env.outputs.environment }}"
 
-          # Try importing existing IAM roles/policies - ignore errors (resource may not exist yet)
-          terraform import aws_iam_role.eks_cluster "$VPC-$ENV-eks-cluster-role" 2>/dev/null || true
-          terraform import aws_iam_role.eks_nodes "$VPC-$ENV-eks-node-role" 2>/dev/null || true
-          terraform import aws_iam_role.ebs_csi_role "$VPC-$ENV-ebs-csi-driver-role" 2>/dev/null || true
-          terraform import aws_iam_role.aws_load_balancer_controller "$VPC-$ENV-aws-load-balancer-controller-role" 2>/dev/null || true
-          terraform import aws_iam_policy.aws_load_balancer_controller "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy" 2>/dev/null || true
+          echo "=== Importing IAM roles/policies (names must match kubernetes.tf) ==="
+          try_import aws_iam_role.eks_cluster "$VPC-$ENV-eks-cluster-role"
+          try_import aws_iam_role.eks_nodes "$VPC-$ENV-eks-node-role"
+          try_import aws_iam_role.ebs_csi_role "$VPC-$ENV-ebs-csi-driver-role"
+          try_import aws_iam_role.aws_load_balancer_controller "$VPC-$ENV-aws-load-balancer-controller-role"
+          try_import aws_iam_policy.aws_load_balancer_controller "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy"
 
-          # Try importing existing OIDC provider (if cluster already exists)
+          echo "=== Importing OIDC provider (if cluster already exists) ==="
           OIDC_URL=$(aws eks describe-cluster --name "$VPC-$ENV-cluster" --query cluster.identity.oidc.issuer --output text 2>/dev/null || echo "")
           if [ -n "$OIDC_URL" ] && [ "$OIDC_URL" != "None" ]; then
             OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviders[?Url=='$OIDC_URL'].Arn" --output text 2>/dev/null || echo "")
             if [ -n "$OIDC_ARN" ]; then
-              terraform import aws_iam_openid_connect_provider.eks "$OIDC_ARN" 2>/dev/null || true
+              try_import aws_iam_openid_connect_provider.eks "$OIDC_ARN"
             fi
           fi
 
-          # Try importing existing EKS cluster (if it exists)
+          echo "=== Importing EKS cluster (if it exists) ==="
           if aws eks describe-cluster --name "$VPC-$ENV-cluster" >/dev/null 2>&1; then
-            terraform import aws_eks_cluster.main "$VPC-$ENV-cluster" 2>/dev/null || true
+            try_import aws_eks_cluster.main "$VPC-$ENV-cluster"
           fi
 
-          echo "Import step complete - continuing with plan/apply"
+          echo "=== Import step complete - continuing with plan/apply ==="
 
       - name: Terraform Plan
         working-directory: ./terraform

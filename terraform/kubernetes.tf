@@ -29,7 +29,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 
 
 resource "aws_iam_role" "eks_nodes" {
-  name = "${var.vpc_name}-eks-node-role"
+  name = "${var.vpc_name}-${var.environment}-eks-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -127,14 +127,14 @@ resource "aws_eks_access_policy_association" "ci_admin_policy" {
 
 resource "aws_eks_access_entry" "node_role" {
   cluster_name  = aws_eks_cluster.main.name
-  principal_arn =  aws_iam_role.eks_nodes.arn
+  principal_arn = aws_iam_role.eks_nodes.arn
   type          = "EC2_LINUX"
 }
 
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "main-nodes"
-  node_role_arn   =  aws_iam_role.eks_nodes.arn
+  node_role_arn   = aws_iam_role.eks_nodes.arn
   ami_type        = "AL2023_x86_64_STANDARD"
   instance_types  = [var.instance_type]
 
@@ -183,7 +183,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 }
 
 resource "aws_iam_role" "ebs_csi_role" {
-  name = "${var.vpc_name}-ebs-csi-driver-role"
+  name = "${var.vpc_name}-${var.environment}-ebs-csi-driver-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -209,7 +209,7 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
 }
 
 resource "aws_iam_role" "aws_load_balancer_controller" {
-  name = "${var.vpc_name}-aws-load-balancer-controller-role"
+  name = "${var.vpc_name}-${var.environment}-aws-load-balancer-controller-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -230,7 +230,7 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
 }
 
 resource "aws_iam_policy" "aws_load_balancer_controller" {
-  name        = "${var.vpc_name}-AWSLoadBalancerControllerIAMPolicy"
+  name        = "${var.vpc_name}-${var.environment}-AWSLoadBalancerControllerIAMPolicy"
   description = "IAM Policy for AWS Load Balancer Controller"
 
   policy = jsonencode({
