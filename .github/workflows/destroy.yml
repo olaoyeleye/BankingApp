@@ -13,11 +13,6 @@ on:
           - dev
           - test
           - prod
-      destroy_infra:
-        description: "Also destroy shared infrastructure (EKS, VPC, EC2)?"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -32,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'destroy') }}
     environment: ${{ github.event.inputs.environment || github.ref_name }}
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
     steps:
       - name: Detect environment
         id: env
@@ -86,11 +83,7 @@ jobs:
         if: steps.cluster-check.outputs.exists == 'true'
         shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.environment }}" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-          else
-            ENV="${GITHUB_REF##*/}"
-          fi
+          ENV="${{ steps.env.outputs.environment }}"
           NAMESPACE="banking-${ENV}"
           echo "Uninstalling banking-app from namespace: $NAMESPACE"
           helm uninstall banking-app -n "$NAMESPACE" --ignore-not-found || true
@@ -100,14 +93,25 @@ jobs:
       - name: Skip - cluster not found
         if: steps.cluster-check.outputs.exists == 'false'
         shell: bash
-        run: echo "Nothing to destroy - EKS cluster does not exist. Destroy complete."
+        run: echo "Nothing to destroy - EKS cluster does not exist. App destroy complete."
 
   destroy-infra:
     needs: destroy-app
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.destroy_infra == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'destroy') }}
     runs-on: ubuntu-latest
-    environment: prod
+    environment: ${{ github.event.inputs.environment || github.ref_name }}
     steps:
+      - name: Detect environment
+        id: env
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="${GITHUB_REF##*/}"
+          fi
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -166,7 +170,8 @@ jobs:
         run: |
           kubectl delete ingress --all -A --ignore-not-found || true
           kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
-          kubectl delete ns banking-dev banking-test banking-prod --ignore-not-found || true
+          ENV="${{ steps.env.outputs.environment }}"
+          kubectl delete ns "banking-${ENV}" --ignore-not-found || true
           kubectl delete ns ingress-nginx datadog --ignore-not-found || true
           helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found || true
           helm uninstall datadog-operator -n datadog --ignore-not-found || true
