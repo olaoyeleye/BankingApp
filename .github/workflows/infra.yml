@@ -131,9 +131,9 @@ jobs:
             try_import aws_eks_addon.ebs_csi "$VPC-$ENV-cluster:aws-ebs-csi-driver"
           fi
 
-          echo "=== Import step complete - continuing with plan/apply ==="
+          echo "=== Import step complete - continuing with addon reconciliation ==="
 
-      - name: Wait for EKS addons to reach ACTIVE state
+      - name: Reconcile EKS addons (wait or auto-recover from failure)
         working-directory: ./terraform
         shell: bash
         run: |
@@ -142,16 +142,56 @@ jobs:
           CLUSTER="$VPC-$ENV-cluster"
 
           if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
-            echo "Cluster $CLUSTER does not exist yet - skipping addon wait (will be created)"
+            echo "Cluster $CLUSTER does not exist yet - skipping addon reconcile (will be created)"
             exit 0
           fi
 
           if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-            echo "Addon aws-ebs-csi-driver not present yet - skipping wait (will be created)"
+            echo "Addon aws-ebs-csi-driver not present yet - skipping reconcile (will be created)"
             exit 0
           fi
 
-          echo "Waiting for EBS CSI addon to reach ACTIVE/DEGRADED state..."
+          # Get current status
+          STATUS=$(aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN")
+          echo "Current addon status: $STATUS"
+
+          # If the addon is in a failed state, delete it so Terraform can recreate it cleanly.
+          if echo "$STATUS" | grep -qE "FAILED"; then
+            echo "WARNING: Add-on is in failed state ($STATUS). Attempting auto-recovery..."
+            echo "Deleting broken add-on (preserving resources so running pods are not disrupted)..."
+            aws eks delete-addon \
+              --cluster-name "$CLUSTER" \
+              --addon-name aws-ebs-csi-driver \
+              --preserve-resources || true
+
+            # Wait for deletion to complete
+            echo "Waiting for add-on deletion to complete..."
+            DEL_WAIT=0
+            while [ "$DEL_WAIT" -lt 30 ]; do
+              DEL_WAIT=$((DEL_WAIT + 1))
+              if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+                echo "Add-on deleted successfully."
+                break
+              fi
+              sleep 10
+            done
+
+            # Remove from Terraform state so it can be recreated
+            echo "Removing aws_eks_addon.ebs_csi from Terraform state..."
+            terraform state rm aws_eks_addon.ebs_csi 2>/dev/null || true
+
+            echo "Add-on recovery complete. Terraform will recreate it during apply."
+            exit 0
+          fi
+
+          # If already stable, proceed
+          if [ "$STATUS" = "ACTIVE" ] || [ "$STATUS" = "DEGRADED" ]; then
+            echo "Add-on already in stable state ($STATUS). Proceeding."
+            exit 0
+          fi
+
+          # Otherwise, wait for it to reach a stable state
+          echo "Add-on is $STATUS. Waiting for stable state (ACTIVE/DEGRADED)..."
           MAX_ATTEMPTS=60
           ATTEMPT=0
           while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
@@ -167,8 +207,16 @@ jobs:
                 sleep 30
                 ;;
               CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
-                echo "ERROR: Add-on is in a failed state ($STATUS). Manual intervention may be required."
-                exit 1
+                echo "WARNING: Add-on transitioned to failed state ($STATUS) during wait."
+                echo "Deleting broken add-on for auto-recovery..."
+                aws eks delete-addon \
+                  --cluster-name "$CLUSTER" \
+                  --addon-name aws-ebs-csi-driver \
+                  --preserve-resources || true
+                sleep 15
+                terraform state rm aws_eks_addon.ebs_csi 2>/dev/null || true
+                echo "Add-on removed. Terraform will recreate it during apply."
+                exit 0
                 ;;
               *)
                 echo "Unexpected status: $STATUS - continuing to wait..."
@@ -176,7 +224,8 @@ jobs:
                 ;;
             esac
           done
-          echo "ERROR: Timed out waiting for addon to reach ACTIVE state after 30 minutes."
+          echo "ERROR: Timed out waiting for addon after 30 minutes."
+          echo "Manual recovery: aws eks delete-addon --cluster-name $CLUSTER --addon-name aws-ebs-csi-driver"
           exit 1
 
       - name: Terraform Plan
