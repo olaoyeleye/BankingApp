@@ -38,6 +38,10 @@ jobs:
           echo "environment=$ENV" >> "$GITHUB_OUTPUT"
           echo "Deploying to environment: $ENV (namespace: banking-$ENV)"
 
+
+
+
+
   build-images:
     needs: set-environment
     runs-on: ubuntu-latest
