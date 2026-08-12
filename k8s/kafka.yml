@@ -39,6 +39,7 @@ metadata:
   name: kafka-service
   namespace: __NAMESPACE__
 spec:
+  publishNotReadyAddresses: true
   selector:
     app: kafka
   ports:
