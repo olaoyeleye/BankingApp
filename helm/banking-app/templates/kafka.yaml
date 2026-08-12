@@ -30,6 +30,13 @@ spec:
           limits:
             memory: "{{ .Values.kafka.resources.limits.memory }}"
             cpu: "{{ .Values.kafka.resources.limits.cpu }}"
+        startupProbe:
+          tcpSocket:
+            port: 29092
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
         readinessProbe:
           tcpSocket:
             port: 29092
