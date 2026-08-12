@@ -109,7 +109,7 @@ kafka:
   replicas: 1
   image:
     repository: confluentinc/cp-kafka
-    tag: "7.5.0"
+    tag: "8.1.1"
   service:
     ports:
       plaintext: 29092
@@ -155,7 +155,7 @@ configmap:
   frontendOrigin: "https://placeholder.elb.amazonaws.com"
   bankFrontend: "https://placeholder.elb.amazonaws.com"
   kafkaBootstrapServers: "kafka-service:29092"
-  kafkaTopic: "activities"
+  #kafkaTopic: "activities"
   redisHost: "redis-service"
   redisPort: "6379"
   postgresHost: "postgres-service"
