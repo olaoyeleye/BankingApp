@@ -72,11 +72,11 @@ kafka:
   replicas: 1
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "100m"
-    limits:
       memory: "1Gi"
       cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "500m"
 
 ingress:
   enabled: true
