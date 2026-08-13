@@ -1,0 +1,289 @@
+name: 1. Provision Infrastructure
+
+on:
+  push:
+    branches: [ "dev", "test", "prod" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+
+
+concurrency:
+  group: infra-provision
+  cancel-in-progress: false
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    # Skip when commit message contains [destroy]
+    if: ${{ !contains(github.event.head_commit.message, 'destroy') }}
+    steps:
+      - name: Detect environment
+        id: env
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="${GITHUB_REF##*/}"
+          fi
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Create terraform.tfvars
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          cat > terraform.tfvars <<EOF
+          region              = "${{ secrets.AWS_REGION }}"
+          ami                 = "${{ secrets.AMI_ID }}"
+          instance_type       = "${{ secrets.INSTANCE_TYPE }}"
+          instance-name-nginx = "${{ secrets.INSTANCE_NAME_NGINX }}"
+          vpc_name            = "${{ secrets.VPC_NAME }}"
+          key_name            = "${{ secrets.KEY_NAME }}"
+          environment         = "${{ steps.env.outputs.environment }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform init -reconfigure -backend-config="key=banking-app/${{ steps.env.outputs.environment }}/terraform.tfstate"
+
+      - name: Download AWS Load Balancer Controller IAM Policy
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+      - name: Reconcile EKS addon (wait or repair, never delete)
+        working-directory: ./terraform
+        shell: bash
+        run: |
+          VPC="${{ secrets.VPC_NAME }}"
+          ENV="${{ steps.env.outputs.environment }}"
+          CLUSTER="$VPC-$ENV-cluster"
+
+          if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
+            echo "Cluster $CLUSTER does not exist yet - skipping addon reconcile"
+            exit 0
+          fi
+
+          if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+            echo "Addon not present yet - skipping reconcile (Terraform will create it)"
+            exit 0
+          fi
+
+          # Helper: get addon status
+          get_status() {
+            aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN"
+          }
+
+          STATUS=$(get_status)
+          echo "Current addon status: $STATUS"
+
+          # If in-flight, wait for it to settle
+          if echo "$STATUS" | grep -qE "CREATING|UPDATING|DELETING"; then
+            echo "Addon is $STATUS. Waiting up to 15 min for it to settle..."
+            MAX=30
+            for i in $(seq 1 $MAX); do
+              sleep 30
+              STATUS=$(get_status)
+              echo "  Attempt $i/$MAX: status = $STATUS"
+              case "$STATUS" in
+                ACTIVE|DEGRADED) break ;;
+                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED) break ;;
+              esac
+            done
+          fi
+
+          # If the addon ended up in a FAILED state, try to repair it via update-addon
+          # (never delete — deletion creates a race condition where AWS hasn't fully removed it)
+          if echo "$STATUS" | grep -qE "FAILED"; then
+            echo "Addon is in $STATUS. Attempting to repair via update-addon..."
+
+            # Build the correct role ARN
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$VPC-$ENV-ebs-csi-driver-role"
+            echo "Updating addon with role ARN: $ROLE_ARN"
+
+            # Try updating the addon to fix it (idempotent, no race condition)
+            aws eks update-addon \
+              --cluster-name "$CLUSTER" \
+              --addon-name aws-ebs-csi-driver \
+              --service-account-role-arn "$ROLE_ARN" \
+              --resolve-conflicts PRESERVE 2>&1 || echo "Update attempt completed (may still be processing)"
+
+            # Wait for the update to settle
+            echo "Waiting for repair to complete..."
+            for i in $(seq 1 30); do
+              sleep 30
+              STATUS=$(get_status)
+              echo "  Repair check $i/30: status = $STATUS"
+              case "$STATUS" in
+                ACTIVE|DEGRADED)
+                  echo "Addon repaired successfully ($STATUS)."
+                  break
+                  ;;
+                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
+                  echo "WARNING: Addon still in $STATUS after repair attempt."
+                  echo "The addon is imported into Terraform state with ignore_changes."
+                  echo "Terraform will NOT try to modify it. It may need manual investigation."
+                  break
+                  ;;
+              esac
+            done
+          fi
+
+          echo "Addon reconcile complete. Current status: $(get_status)"
+
+      - name: Import existing resources (if they exist)
+        working-directory: ./terraform
+        shell: bash
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: |
+          # Helper: import a resource, treating "already managed" / "not found" as non-fatal
+          try_import() {
+            local addr="$1"
+            local id="$2"
+            local log
+            log="$(terraform import "$addr" "$id" 2>&1)" || true
+            echo "$log"
+            if echo "$log" | grep -q "Resource already managed by Terraform"; then
+              echo "=> '$addr' already in state, skipping"
+            elif echo "$log" | grep -q "Cannot import non-existent remote object"; then
+              echo "=> '$addr' does not exist remotely yet, will be created"
+            elif echo "$log" | grep -q "Import successful"; then
+              echo "=> '$addr' imported"
+            fi
+          }
+
+          # Get account ID for policy ARN
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          VPC="${{ secrets.VPC_NAME }}"
+          ENV="${{ steps.env.outputs.environment }}"
+
+          echo "=== Importing IAM roles/policies ==="
+          try_import aws_iam_role.eks_cluster "$VPC-$ENV-eks-cluster-role"
+          try_import aws_iam_role.eks_nodes "$VPC-$ENV-eks-node-role"
+          try_import aws_iam_role.ebs_csi_role "$VPC-$ENV-ebs-csi-driver-role"
+          try_import aws_iam_role.aws_load_balancer_controller "$VPC-$ENV-aws-load-balancer-controller-role"
+          try_import aws_iam_policy.aws_load_balancer_controller "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy"
+
+          echo "=== Importing OIDC provider (if cluster already exists) ==="
+          OIDC_URL=$(aws eks describe-cluster --name "$VPC-$ENV-cluster" --query cluster.identity.oidc.issuer --output text 2>/dev/null || echo "")
+          if [ -n "$OIDC_URL" ] && [ "$OIDC_URL" != "None" ]; then
+            OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviders[?Url=='$OIDC_URL'].Arn" --output text 2>/dev/null || echo "")
+            if [ -n "$OIDC_ARN" ]; then
+              try_import aws_iam_openid_connect_provider.eks "$OIDC_ARN"
+            fi
+          fi
+
+          echo "=== Importing EKS cluster (if it exists) ==="
+          if aws eks describe-cluster --name "$VPC-$ENV-cluster" >/dev/null 2>&1; then
+            try_import aws_eks_cluster.main "$VPC-$ENV-cluster"
+          fi
+
+          echo "=== Importing EKS node group (if it exists) ==="
+          if aws eks describe-nodegroup --cluster-name "$VPC-$ENV-cluster" --nodegroup-name "main-nodes" >/dev/null 2>&1; then
+            try_import aws_eks_node_group.main "$VPC-$ENV-cluster:main-nodes"
+          fi
+
+          echo "=== Importing EKS addon (if it exists) ==="
+          # Always import — even if FAILED. Terraform lifecycle.ignore_changes prevents update conflicts.
+          if aws eks describe-addon --cluster-name "$VPC-$ENV-cluster" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
+            try_import aws_eks_addon.ebs_csi "$VPC-$ENV-cluster:aws-ebs-csi-driver"
+          fi
+
+          echo "=== Import step complete ==="
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        env:
+          TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Configure Ansible inventory
+        shell: bash
+        run: |
+          NGINX_IP=$(cd terraform && terraform output -raw nginx_public_ip 2>/dev/null || echo "")
+          if [ -z "$NGINX_IP" ]; then
+            echo "Warning: nginx_public_ip output not found, trying instance_public_ip..."
+            NGINX_IP=$(cd terraform && terraform output -raw instance_public_ip 2>/dev/null || echo "")
+          fi
+          echo "Nginx IP: $NGINX_IP"
+          mkdir -p ansible
+          {
+            echo '[nginx]'
+            echo "$NGINX_IP ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/ansible_key.pem"
+            echo ''
+            echo '[nginx:vars]'
+            echo 'ansible_python_interpreter=/usr/bin/python3'
+            echo "aws_region=${{ secrets.AWS_REGION }}"
+            echo "eks_cluster_name=${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
+          } > ansible/hosts.ini
+          echo "=== Generated hosts.ini ==="
+          cat ansible/hosts.ini
+          echo "==========================="
+
+
+
+      - name: Save SSH private key
+        env:
+          SSH_KEY: ${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/ansible_key.pem
+          chmod 600 ~/.ssh/ansible_key.pem
+
+      - name: Run Ansible playbook
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          cd ansible
+          ansible-galaxy collection install kubernetes.core
+          export ANSIBLE_HOST_KEY_CHECKING=False
+          ansible-playbook -i hosts.ini playbook.yml -v \
+            --extra-vars "aws_region=${{ secrets.AWS_REGION }} eks_cluster_name=${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
+
+      - name: Print next steps
+        shell: bash
+        run: |
+          echo "============================================"
+          echo "  Infrastructure provisioned successfully!"
+          echo "============================================"
+          echo ""
+          echo "Next steps:"
+          echo "  Push to dev/test/prod branch to trigger Deploy Application workflow"
+          echo "  Or run the Destroy workflow manually to tear down"
+          echo ""
+          echo "EKS Cluster: ${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
+          echo "Region: ${{ secrets.AWS_REGION }}"
+          echo "============================================"
