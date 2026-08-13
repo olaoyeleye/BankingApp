@@ -166,46 +166,9 @@ jobs:
 
 
 
-        
-      - name: Remove Kubernetes resources and Helm releases
-        shell: bash
-        run: |
-          kubectl delete ingress --all -A --ignore-not-found || true
-          kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
-          ENV="${{ steps.env.outputs.environment }}"
-          kubectl delete ns "banking-${ENV}" --ignore-not-found || true
-          kubectl delete ns ingress-nginx datadog --ignore-not-found || true
-          helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found || true
-          helm uninstall datadog-operator -n datadog --ignore-not-found || true
-          sleep 60
-
-      - name: Delete EKS node groups
-        shell: bash
-        run: |
-          CLUSTER_NAME="${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster"
-          REGION="${{ secrets.AWS_REGION }}"
-          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
-            NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "$REGION" --query 'nodegroups[]' --output text)
-            if [ -n "${NODEGROUPS// /}" ]; then
-              for NG in $NODEGROUPS; do
-                echo "Deleting node group: $NG"
-                aws eks delete-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
-                aws eks wait nodegroup-deleted --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NG" --region "$REGION" || true
-              done
-            fi
-          fi
-
-      - name: Delete EKS add-ons
-        shell: bash
-        run: |
-          aws eks delete-addon --cluster-name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
-          aws eks wait addon-deleted --cluster-name "${{ secrets.VPC_NAME }}-${{ steps.env.outputs.environment }}-cluster" --addon-name aws-ebs-csi-driver --region "${{ secrets.AWS_REGION }}" || true
 
 
 
-
-
-          
       - name: Verify EKS cluster exists
         shell: bash
         run: |

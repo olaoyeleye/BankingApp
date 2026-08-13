@@ -73,147 +73,85 @@ jobs:
         run: |
           curl -Lo iam_policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
-      - name: Reconcile EKS addon (wait or repair, never delete)
-        working-directory: ./terraform
-        shell: bash
-        run: |
-          VPC="${{ secrets.VPC_NAME }}"
-          ENV="${{ steps.env.outputs.environment }}"
-          CLUSTER="$VPC-$ENV-cluster"
-
-          if ! aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
-            echo "Cluster $CLUSTER does not exist yet - skipping addon reconcile"
-            exit 0
-          fi
-
-          if ! aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-            echo "Addon not present yet - skipping reconcile (Terraform will create it)"
-            exit 0
-          fi
-
-          # Helper: get addon status
-          get_status() {
-            aws eks describe-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --query 'addon.status' --output text 2>/dev/null || echo "UNKNOWN"
-          }
-
-          STATUS=$(get_status)
-          echo "Current addon status: $STATUS"
-
-          # If in-flight, wait for it to settle
-          if echo "$STATUS" | grep -qE "CREATING|UPDATING|DELETING"; then
-            echo "Addon is $STATUS. Waiting up to 15 min for it to settle..."
-            MAX=30
-            for i in $(seq 1 $MAX); do
-              sleep 30
-              STATUS=$(get_status)
-              echo "  Attempt $i/$MAX: status = $STATUS"
-              case "$STATUS" in
-                ACTIVE|DEGRADED) break ;;
-                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED) break ;;
-              esac
-            done
-          fi
-
-          # If the addon ended up in a FAILED state, try to repair it via update-addon
-          # (never delete — deletion creates a race condition where AWS hasn't fully removed it)
-          if echo "$STATUS" | grep -qE "FAILED"; then
-            echo "Addon is in $STATUS. Attempting to repair via update-addon..."
-
-            # Build the correct role ARN
-            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-            ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$VPC-$ENV-ebs-csi-driver-role"
-            echo "Updating addon with role ARN: $ROLE_ARN"
-
-            # Try updating the addon to fix it (idempotent, no race condition)
-            aws eks update-addon \
-              --cluster-name "$CLUSTER" \
-              --addon-name aws-ebs-csi-driver \
-              --service-account-role-arn "$ROLE_ARN" \
-              --resolve-conflicts PRESERVE 2>&1 || echo "Update attempt completed (may still be processing)"
-
-            # Wait for the update to settle
-            echo "Waiting for repair to complete..."
-            for i in $(seq 1 30); do
-              sleep 30
-              STATUS=$(get_status)
-              echo "  Repair check $i/30: status = $STATUS"
-              case "$STATUS" in
-                ACTIVE|DEGRADED)
-                  echo "Addon repaired successfully ($STATUS)."
-                  break
-                  ;;
-                CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED)
-                  echo "WARNING: Addon still in $STATUS after repair attempt."
-                  echo "The addon is imported into Terraform state with ignore_changes."
-                  echo "Terraform will NOT try to modify it. It may need manual investigation."
-                  break
-                  ;;
-              esac
-            done
-          fi
-
-          echo "Addon reconcile complete. Current status: $(get_status)"
-
-      - name: Import existing resources (if they exist)
+      # ─────────────────────────────────────────────────────────────────────
+      # FRESH CLUSTER: Destroy any existing infrastructure before applying.
+      # This step tears down cluster, nodegroups, addons, IAM roles, and
+      # any orphaned AWS resources so every run starts from a clean slate.
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Destroy existing infrastructure (fresh cluster)
         working-directory: ./terraform
         shell: bash
         env:
           TF_VAR_eks_admin_principal_arn: ${{ secrets.EKS_ADMIN_PRINCIPAL_ARN }}
         run: |
-          # Helper: import a resource, treating "already managed" / "not found" as non-fatal
-          try_import() {
-            local addr="$1"
-            local id="$2"
-            local log
-            log="$(terraform import "$addr" "$id" 2>&1)" || true
-            echo "$log"
-            if echo "$log" | grep -q "Resource already managed by Terraform"; then
-              echo "=> '$addr' already in state, skipping"
-            elif echo "$log" | grep -q "Cannot import non-existent remote object"; then
-              echo "=> '$addr' does not exist remotely yet, will be created"
-            elif echo "$log" | grep -q "Import successful"; then
-              echo "=> '$addr' imported"
-            fi
-          }
-
-          # Get account ID for policy ARN
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          set +e  # never fail the job — "nothing to destroy" is fine
           VPC="${{ secrets.VPC_NAME }}"
           ENV="${{ steps.env.outputs.environment }}"
+          CLUSTER="$VPC-$ENV-cluster"
+          REGION="${{ secrets.AWS_REGION }}"
 
-          echo "=== Importing IAM roles/policies ==="
-          try_import aws_iam_role.eks_cluster "$VPC-$ENV-eks-cluster-role"
-          try_import aws_iam_role.eks_nodes "$VPC-$ENV-eks-node-role"
-          try_import aws_iam_role.ebs_csi_role "$VPC-$ENV-ebs-csi-driver-role"
-          try_import aws_iam_role.aws_load_balancer_controller "$VPC-$ENV-aws-load-balancer-controller-role"
-          try_import aws_iam_policy.aws_load_balancer_controller "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy"
+          echo "=== Checking for existing cluster: $CLUSTER ==="
+          if ! aws eks describe-cluster --name "$CLUSTER" --region "$REGION" >/dev/null 2>&1; then
+            echo "Cluster $CLUSTER does not exist — nothing to destroy."
+          else
+            echo "Cluster found. Proceeding with full teardown."
 
-          echo "=== Importing OIDC provider (if cluster already exists) ==="
-          OIDC_URL=$(aws eks describe-cluster --name "$VPC-$ENV-cluster" --query cluster.identity.oidc.issuer --output text 2>/dev/null || echo "")
-          if [ -n "$OIDC_URL" ] && [ "$OIDC_URL" != "None" ]; then
-            OIDC_ARN=$(aws iam list-open-id-connect-providers --query "OpenIDConnectProviders[?Url=='$OIDC_URL'].Arn" --output text 2>/dev/null || echo "")
-            if [ -n "$OIDC_ARN" ]; then
-              try_import aws_iam_openid_connect_provider.eks "$OIDC_ARN"
+            # Install kubectl and Helm for k8s-level cleanup
+            echo "=== Installing kubectl and Helm ==="
+            curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
+            curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+            echo "=== Updating kubeconfig ==="
+            aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" || true
+
+            echo "=== Removing Kubernetes resources (ingresses, LoadBalancers, Helm releases) ==="
+            ENV_NS="banking-$ENV"
+            helm uninstall banking-app -n "$ENV_NS" --ignore-not-found || true
+            helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found || true
+            helm uninstall datadog-operator -n datadog --ignore-not-found || true
+            kubectl delete ingress --all -A --ignore-not-found || true
+            kubectl delete svc --all -A --field-selector spec.type=LoadBalancer --ignore-not-found || true
+            kubectl delete namespace "$ENV_NS" --ignore-not-found || true
+            kubectl delete namespace ingress-nginx datadog --ignore-not-found || true
+            echo "Waiting 60s for LoadBalancers to deprovision..."
+            sleep 60
+
+            echo "=== Deleting EKS add-ons ==="
+            aws eks delete-addon --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --region "$REGION" || true
+            aws eks wait addon-deleted --cluster-name "$CLUSTER" --addon-name aws-ebs-csi-driver --region "$REGION" || true
+
+            echo "=== Deleting EKS node groups ==="
+            NODEGROUPS=$(aws eks list-nodegroups --cluster-name "$CLUSTER" --region "$REGION" --query 'nodegroups[]' --output text 2>/dev/null)
+            if [ -n "${NODEGROUPS// /}" ]; then
+              for NG in $NODEGROUPS; do
+                echo "  Deleting node group: $NG"
+                aws eks delete-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$NG" --region "$REGION" || true
+                aws eks wait nodegroup-deleted --cluster-name "$CLUSTER" --nodegroup-name "$NG" --region "$REGION" || true
+              done
             fi
           fi
 
-          echo "=== Importing EKS cluster (if it exists) ==="
-          if aws eks describe-cluster --name "$VPC-$ENV-cluster" >/dev/null 2>&1; then
-            try_import aws_eks_cluster.main "$VPC-$ENV-cluster"
-          fi
+          echo "=== Terraform destroy (removes state-tracked resources) ==="
+          terraform plan -destroy -out=destroy.tfplan 2>&1 || true
+          terraform apply -auto-approve destroy.tfplan 2>&1 || true
 
-          echo "=== Importing EKS node group (if it exists) ==="
-          if aws eks describe-nodegroup --cluster-name "$VPC-$ENV-cluster" --nodegroup-name "main-nodes" >/dev/null 2>&1; then
-            try_import aws_eks_node_group.main "$VPC-$ENV-cluster:main-nodes"
-          fi
+          # Remove OIDC provider from state (can cause destroy to hang)
+          terraform state rm aws_iam_openid_connect_provider.eks 2>/dev/null || true
 
-          echo "=== Importing EKS addon (if it exists) ==="
-          # Always import — even if FAILED. Terraform lifecycle.ignore_changes prevents update conflicts.
-          if aws eks describe-addon --cluster-name "$VPC-$ENV-cluster" --addon-name aws-ebs-csi-driver >/dev/null 2>&1; then
-            try_import aws_eks_addon.ebs_csi "$VPC-$ENV-cluster:aws-ebs-csi-driver"
-          fi
+          echo "=== Cleaning up orphaned IAM roles/policies (if any) ==="
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws iam delete-role-policy --role-name "$VPC-$ENV-aws-load-balancer-controller-role" --policy-arn "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy" 2>/dev/null || true
+          aws iam delete-policy --policy-arn "arn:aws:iam::$ACCOUNT_ID:policy/$VPC-$ENV-AWSLoadBalancerControllerIAMPolicy" 2>/dev/null || true
+          aws iam detach-role-policy --role-name "$VPC-$ENV-ebs-csi-driver-role" --policy-arn "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy" 2>/dev/null || true
+          aws iam delete-role --role-name "$VPC-$ENV-ebs-csi-driver-role" 2>/dev/null || true
+          aws iam delete-role --role-name "$VPC-$ENV-aws-load-balancer-controller-role" 2>/dev/null || true
 
-          echo "=== Import step complete ==="
+          echo "=== Waiting for cluster to fully delete (if it existed) ==="
+          aws eks wait cluster-deleted --name "$CLUSTER" --region "$REGION" 2>/dev/null || true
+
+          echo "=== Teardown complete. State is now clean. ==="
 
       - name: Terraform Plan
         working-directory: ./terraform
