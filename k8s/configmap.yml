@@ -22,17 +22,17 @@ data:
   CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
   KAFKA_HEAP_OPTS: "-Xms512M -Xmx1G"
   KAFKA_BOOTSTRAP_SERVERS: kafka-service:29092
-  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bankingdb
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-service:5432/bankingdb
   SPRING_DATASOURCE_USERNAME: bankuser
   SPRING_DATASOURCE_PASSWORD: bankpass
   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-  DATABASE_URL: postgresql://bankuser:bankpass@postgres:5432/bankingdb
+  DATABASE_URL: postgresql://bankuser:bankpass@postgres-service:5432/bankingdb
   POSTGRES_DB: bankingdb
   POSTGRES_USER: bankuser
   POSTGRES_PASSWORD: bankpass
   FRONTEND_ORIGIN: https://aaeabe0a13c754cd4988b76b44eb0237-2123364797.eu-west-1.elb.amazonaws.com
   KAFKA_BROKER: "kafka-service.banking-dev.svc.cluster.local:9092"
-  REDIS_HOST: redis
+  REDIS_HOST: redis-service
   REDIS_PORT: "6379"
   SERVER_PORT: "8080"
   ACTIVITY_SERVICE: http://activity-service:8001
