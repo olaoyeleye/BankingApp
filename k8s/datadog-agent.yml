@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -10,7 +11,8 @@ metadata:
   namespace: datadog
 type: Opaque
 stringData:
-  api-key: "${DATADOG_API_KEY}" 
+  #api-key: "${DATADOG_API_KEY}" 
+  api-key: "db818958167bd4ed794424467a998ebc"
 ---
 apiVersion: datadoghq.com/v2alpha1
 kind: DatadogAgent
