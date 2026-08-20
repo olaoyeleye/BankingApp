@@ -30,7 +30,7 @@ data:
   POSTGRES_DB: bankingdb
   POSTGRES_USER: bankuser
   POSTGRES_PASSWORD: bankpass
-  FRONTEND_ORIGIN: https://a8da3e529af0643d2ba610ad7044c4f4-1990363720.eu-west-1.elb.amazonaws.com
+  FRONTEND_ORIGIN: https://ac4b563a41d0c4f9181d6e7c44ef3ca3-1098965390.eu-west-1.elb.amazonaws.com
   KAFKA_BROKER: "kafka-service.banking-dev.svc.cluster.local:9092"
   REDIS_HOST: redis-service
   REDIS_PORT: "6379"
