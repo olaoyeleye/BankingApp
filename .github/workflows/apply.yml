@@ -225,6 +225,8 @@ jobs:
           echo "Application deployed! Ingress URL: $INGRESS_ALB"
 
 
+
+
   sync-ec2:
     needs: [ set-environment, deploy-helm ]
     runs-on: ubuntu-latest
