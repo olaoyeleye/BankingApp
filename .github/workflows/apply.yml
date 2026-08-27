@@ -227,6 +227,8 @@ jobs:
 
 
 
+
+
   sync-ec2:
     needs: [ set-environment, deploy-helm ]
     runs-on: ubuntu-latest
